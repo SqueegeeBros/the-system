@@ -451,3 +451,8 @@ input[type=number]{-moz-appearance:textfield}
 .amt{color:var(--acc1);font-size:14px}
 .toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px}
 .toastbtn{background:#000;color:#fff;border-radius:99px;padding:8px 12px;font:700 13px var(--h);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+
+/* Never let anything push the page wider than the screen */
+html,body{max-width:100%;overflow-x:hidden}
+.bubble,.rt,.qt,.tname,.meal b,.note,.rs,.msg{overflow-wrap:anywhere}
+img,video,svg,canvas{max-width:100%}

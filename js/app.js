@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -16,6 +16,15 @@ import * as Settings from './views/settings.js';
 import './views/coach.js';
 import { openOnboarding } from './views/onboard.js';
 import { autoBackup } from './backup.js';
+
+// If Chrome renders in "Desktop site" mode on a phone (page ~980px wide on a ~360px screen),
+// scale the app back up so it looks like a phone app again.
+function fitPhone() {
+  const sw = screen.width, ratio = window.innerWidth / sw;
+  document.documentElement.style.zoom = sw && sw < 600 && ratio > 1.3 ? String(ratio) : '';
+}
+fitPhone();
+window.addEventListener('resize', fitPhone);
 
 const VIEWS = { quests: Quests, food: Food, train: Train, work: Work, status: Status, settings: Settings };
 const main = $('#view');

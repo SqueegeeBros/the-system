@@ -380,3 +380,34 @@ input.stval{height:56px;text-align:center;font:600 30px var(--head)!important;pa
 .btn.big{min-height:56px;font-size:13px}
 .restbar{margin-top:10px}
 .restrow{margin:0 0 6px}
+
+/* Coach */
+.fab{position:fixed;right:max(14px,calc(50% - 216px));bottom:calc(env(safe-area-inset-bottom) + 78px);z-index:6;display:flex;align-items:center;gap:6px;
+  padding:11px 14px;border:1px solid var(--gold);background:var(--gold);color:var(--bg);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.fab svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7}
+.fab[hidden]{display:none}
+body{padding-bottom:calc(env(safe-area-inset-bottom) + 140px)}
+.sheet-card.tall{height:88vh}
+.sheet-card.tall .sheet-body{display:flex;flex-direction:column;flex:1;padding-bottom:12px}
+.chat{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px}
+.chatmsgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:8px 0}
+.chatempty{padding:20px 4px}
+.msg{display:flex;flex-direction:column;gap:6px;max-width:88%}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.model{align-self:flex-start}
+.bubble{padding:10px 12px;font-size:14px;line-height:1.5;border:1px solid var(--hair);background:var(--panel2)}
+.msg.user .bubble{background:rgba(184,154,98,.16);border-color:var(--line-dim)}
+.bubble p+p{margin-top:6px}
+.bubble ul{margin:6px 0 2px 18px}
+.bubble li{margin:2px 0}
+.bubble b{color:var(--gold);font-weight:600}
+.typing{display:flex;gap:4px;padding:14px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.foodsug{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:9px 10px;border:1px solid var(--line-dim);background:none;text-align:left;cursor:pointer;font-size:13px}
+.foodsug small{color:var(--muted)}
+.foodsug.done{opacity:.55}
+.foodsug.done .go{background:var(--green)}
+.chatbar{display:flex;gap:8px}
+.chatbar input{flex:1}

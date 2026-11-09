@@ -1,9 +1,9 @@
 // Service worker: offline app shell + best-effort evening reminder.
-const VERSION = 'system-v2';
+const VERSION = 'system-v3';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/core.js', 'js/state.js', 'js/engine.js', 'js/db.js', 'js/util.js', 'js/ui.js', 'js/ai.js', 'js/barcode.js', 'js/backup.js',
-  'js/views/quests.js', 'js/views/food.js', 'js/views/train.js', 'js/views/work.js', 'js/views/status.js', 'js/views/settings.js',
+  'js/views/quests.js', 'js/views/food.js', 'js/views/train.js', 'js/views/work.js', 'js/views/status.js', 'js/views/settings.js', 'js/views/coach.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-180.png',
 ];
 
@@ -31,7 +31,7 @@ self.addEventListener('fetch', e => {
   }
   if (url.origin !== location.origin) return; // APIs (Gemini, Open Food Facts, Google) go straight to network
   // App files: network first so updates arrive, cache as offline fallback
-  e.respondWith(fetch(e.request).then(res => {
+  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
     return res;
   }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html'))));

@@ -3,7 +3,9 @@ import { S, load, save, flush } from './state.js';
 import * as E from './engine.js';
 import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
-import { notice } from './ui.js';
+import { notice, toast } from './ui.js';
+
+const APP_VERSION = 3;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -11,6 +13,7 @@ import * as Train from './views/train.js';
 import * as Work from './views/work.js';
 import * as Status from './views/status.js';
 import * as Settings from './views/settings.js';
+import './views/coach.js';
 import { autoBackup } from './backup.js';
 
 const VIEWS = { quests: Quests, food: Food, train: Train, work: Work, status: Status, settings: Settings };
@@ -21,6 +24,7 @@ nav.render = () => {
   const y = window.scrollY;
   main.innerHTML = v.render();
   v.mount?.(main);
+  $('#fab').hidden = nav.tab === 'settings' || !!S.activeWorkout && nav.tab === 'train';
   $$('nav [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === nav.tab || (nav.tab === 'settings' && b.dataset.tab === 'status')));
   tick();
   window.scrollTo(0, y);
@@ -100,6 +104,8 @@ window.addEventListener('pagehide', () => flush());
     S.seenWelcome = true; save();
     notice({ title: 'The System', html: `<div class="msg sm">Your daily quests reset at midnight. Miss one and you lose XP and your streak. Three missed days in a row costs you a rank.<br><br>Before you rely on it, check these in <b>Status → Settings</b>: your Gemini key, your split and your bedtime. Then fix the estimated macros in <b>Food → My Meals</b>.</div>`, btn: 'Begin' });
   }
+  if (S.appVersion && S.appVersion < APP_VERSION) toast('The System updated. New features are live.');
+  if (S.appVersion !== APP_VERSION) { S.appVersion = APP_VERSION; save(); }
   lastDay = new Date().toDateString();
   setInterval(heartbeat, 1000);
   autoBackup().then(ok => ok && rerender());

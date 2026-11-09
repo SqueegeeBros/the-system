@@ -105,3 +105,38 @@ export async function testKey() {
   const r = await call([{ text: 'Reply with ok set to true.' }], { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' } }, required: ['ok'] });
   return !!r.ok;
 }
+
+// ---------- Coach chat ----------
+export async function coachChat(history, context) {
+  if (!hasKey()) throw new Error('Add your free Gemini API key in Status → Settings first.');
+  const system = `You are "the Coach" inside The System, Nathan's personal quest-tracker app (Solo Leveling style, but keep your tone grounded, direct and practical — no anime roleplay, no hype, no flattery).
+Nathan: 19, 6'4", lean bulk for muscle, lifts 5 days a week at about 4–5 AM before technical school, meal-preps on a budget (Aldi/Walmart), runs an exterior-cleaning business called Squeegee Bros (window cleaning, gutters, pressure washing) and struggles with distraction during work time.
+Hard rule: never suggest peanut butter or peanuts in any form.
+Answer the actual question in a few short lines or a short list. Use real numbers from the context. If he's behind on calories or protein, give concrete foods/amounts that fit what he has (his saved meals first). For work, give specific next actions for the business. Say so when you're unsure.
+If Nathan says he ate something or asks you to log food, put each item in "foods" with realistic macros so the app can offer a one-tap log. Otherwise leave "foods" empty. Never claim you logged anything yourself.
+Current app data (live):
+${context}`;
+  const contents = history.slice(-16).map(m => ({ role: m.role === 'model' ? 'model' : 'user', parts: [{ text: m.text }] }));
+  const schema = {
+    type: 'OBJECT',
+    properties: {
+      reply: STR,
+      foods: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: STR, kcal: NUM, protein: NUM, carbs: NUM, fat: NUM }, required: ['name', 'kcal', 'protein', 'carbs', 'fat'] } },
+    },
+    required: ['reply'],
+  };
+  const body = (model) => fetch(`${BASE}${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.settings.geminiKey.trim() },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents,
+      generationConfig: { responseMimeType: 'application/json', responseSchema: schema } }),
+  });
+  const model = S.settings.geminiModel?.trim() || 'gemini-flash-latest';
+  let res = await body(model).catch(() => null);
+  if (res && [403, 404, 429].includes(res.status) && model !== FALLBACK) res = await body(FALLBACK).catch(() => null);
+  if (!res) throw new Error('No connection. Try again when you’re online.');
+  if (!res.ok) { const e = new Error(); e.status = res.status; e.body = await res.text().catch(() => ''); throw friendly(e); }
+  const j = await res.json();
+  const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+  try { return JSON.parse(text); } catch { return { reply: text || 'No answer. Try rephrasing.', foods: [] }; }
+}

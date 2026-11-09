@@ -73,6 +73,7 @@ export function defaults() {
     lastProcessed: null,
     backup: { lastAt: 0, fileId: null },
     events: [],            // recent system log
+    chat: [],              // coach conversation
   };
 }
 

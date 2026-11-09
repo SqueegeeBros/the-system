@@ -75,11 +75,11 @@ const NUM = { type: 'NUMBER' }, STR = { type: 'STRING' };
 
 export async function analyzePhoto(base64) {
   const saved = S.meals.map(m => `${m.id}: ${m.name} (${m.kcal} kcal, ${m.p}P/${m.c}C/${m.f}F per serving)`).join('\n');
-  const prompt = `You estimate nutrition from food photos for a 19-year-old lifter tracking macros.
+  const prompt = `You estimate nutrition from food photos for someone tracking macros.
 Identify each distinct food, estimate the portion actually shown, and estimate calories, protein, carbs and fat for that portion.
 Be realistic: do not lowball oils, sauces or portion sizes.
 If the plate clearly matches one of the user's saved meals below, set matchMealId to that id; otherwise leave it empty.
-Set containsPeanut true if anything likely contains peanuts or peanut butter.
+Set containsPeanut true if anything likely contains peanuts or peanut butter.${S.settings.allergens.length ? `\nAlso mention in note if anything likely contains: ${S.settings.allergens.join(', ')}.` : ''}
 Saved meals:
 ${saved}`;
   return call([{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: base64 } }], {
@@ -126,11 +126,12 @@ export async function testKey() {
 // ---------- Coach chat ----------
 export async function coachChat(history, context) {
   if (!hasKey()) throw new Error('Add your free Gemini API key in Status → Settings first.');
-  const system = `You are "the Coach" inside The System, Nathan's personal quest-tracker app (Solo Leveling style, but keep your tone grounded, direct and practical — no anime roleplay, no hype, no flattery).
-Nathan: 19, 6'4", lean bulk for muscle, lifts 5 days a week at about 4–5 AM before technical school, meal-preps on a budget (Aldi/Walmart), runs an exterior-cleaning business called Squeegee Bros (window cleaning, gutters, pressure washing) and struggles with distraction during work time.
-Hard rule: never suggest peanut butter or peanuts in any form.
-Answer the actual question in a few short lines or a short list. Use real numbers from the context. If he's behind on calories or protein, give concrete foods/amounts that fit what he has (his saved meals first). For work, give specific next actions for the business. Say so when you're unsure.
-If Nathan says he ate something or asks you to log food, put each item in "foods" with realistic macros so the app can offer a one-tap log. Otherwise leave "foods" empty. Never claim you logged anything yourself.
+  const name = S.profile.name || 'the user', about = S.profile.about?.trim();
+  const system = `You are "the Coach" inside The System, a personal quest-tracker app (gamified, but keep your tone grounded, direct and practical — no roleplay, no hype, no flattery).
+You're talking with ${name}.${about ? ` About them, in their words: ${about}` : ''}
+${S.settings.allergens.length ? `Hard rule: never suggest anything containing ${S.settings.allergens.join(', ')}.` : ''}
+Answer the actual question in a few short lines or a short list. Use real numbers from the context. If they're behind on calories or protein, give concrete foods/amounts that fit what they have (their saved meals first). For work, give specific next actions. Say so when you're unsure.
+If they say they ate something or ask you to log food, put each item in "foods" with realistic macros so the app can offer a one-tap log. Otherwise leave "foods" empty. Never claim you logged anything yourself.
 Current app data (live):
 ${context}`;
   const contents = history.slice(-16).map(m => ({ role: m.role === 'model' ? 'model' : 'user', parts: [{ text: m.text }] }));

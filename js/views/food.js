@@ -21,9 +21,11 @@ export function allergenHit(text) {
   return S.settings.allergens.find(a => a && t.includes(a.toLowerCase())) || null;
 }
 const mealText = m => [m.name, ...(m.ingredients || []).map(i => i.item)].join(' ');
-const mealHasAllergen = m => m.peanut || allergenHit(mealText(m));
+const mealHasAllergen = m => (m.peanut && peanutOn()) || allergenHit(mealText(m));
 
+const peanutOn = () => S.settings.allergens.some(a => /peanut/i.test(a));
 async function allergenGate(flag, name) {
+  if (flag === 'peanut' || flag === true) flag = peanutOn() ? 'peanut' : null;
   if (!flag) return true;
   const word = typeof flag === 'string' ? flag : 'peanut';
   return confirmBox('Allergen warning', `<b>${esc(name)}</b> may contain <b>${esc(word)}</b>.<br>Log it anyway?`, 'Log anyway', true);
@@ -279,7 +281,7 @@ export async function onPhoto(file) {
   }
   const match = res.matchMealId && S.meals.find(m => m.id === res.matchMealId);
   const items = res.items || [];
-  const peanut = res.containsPeanut || items.some(i => allergenHit(i.name));
+  const peanut = (res.containsPeanut && peanutOn()) || items.some(i => allergenHit(i.name));
   sheet('Photo scan', `
     ${peanut ? `<div class="alert">Possible <b>peanut</b> detected. Check before eating.</div>` : ''}
     ${match ? `<div class="matchcard"><div>Looks like your <b>${esc(match.name)}</b>.</div>
@@ -344,7 +346,7 @@ async function bcLookup(code) {
     return;
   }
   const useServ = !!product.perServing;
-  const wasPeanut = product.peanut || allergenHit(product.name);
+  const wasPeanut = (product.peanut && peanutOn()) || allergenHit(product.name);
   out.innerHTML = `
     ${wasPeanut ? `<div class="alert">This product lists <b>peanut</b> (or traces).</div>` : ''}
     <div class="rt mt">${esc(product.name)}</div><div class="rs">${esc(product.brand)}${product.servingSize ? ` · serving ${esc(product.servingSize)}` : ''}</div>
@@ -443,7 +445,7 @@ function mealEditor(meal, fromAI = null) {
   const editing = !!meal;
   sheet(editing ? 'Edit meal' : fromAI ? 'Review AI meal' : 'New meal', `
     ${fromAI?.note ? `<div class="note">AI note: ${esc(fromAI.note)}</div>` : ''}
-    ${fromAI?.peanut ? `<div class="alert">The AI flagged <b>peanut</b> in this recipe.</div>` : ''}
+    ${fromAI?.peanut && peanutOn() ? `<div class="alert">The AI flagged <b>peanut</b> in this recipe.</div>` : ''}
     <label class="field"><span>Name</span><input id="me-name" value="${esc(m.name)}"></label>
     <div class="grid2">
       <label class="field"><span>Type</span><select id="me-tag">${TAGS.map(t => `<option ${t === m.tag ? 'selected' : ''}>${t}</option>`).join('')}</select></label>

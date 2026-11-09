@@ -1,4 +1,4 @@
-// WORK: focus timer, distraction log, Squeegee Bros side quests, weekly insight.
+// WORK: focus timer, distraction log, side quests, weekly insight.
 import { S, day, save, logEvent } from '../state.js';
 import * as E from '../engine.js';
 import { $, esc, uid, dkey, addDays, parseKey, DOW3, clock, pct, timeStr, barChart } from '../util.js';

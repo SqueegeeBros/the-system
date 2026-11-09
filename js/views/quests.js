@@ -78,7 +78,7 @@ function questRows(k) {
     if (q === 'focus') {
       const sec = E.focusSecFor(k), goal = S.settings.focusMin * 60;
       return qrow({ done, act: 'nav.go', data: 'data-tab="work"', title: 'Deep work',
-        sub: `<span>Squeegee Bros · <span data-tick="focus-mins">${Math.floor(sec / 60)}</span> of ${S.settings.focusMin} min</span><div class="bar"><i data-tick-bar style="width:${pct(sec, goal)}%"></i></div>`,
+        sub: `<span>${S.profile.workLabel ? esc(S.profile.workLabel) + ' · ' : ''}<span data-tick="focus-mins">${Math.floor(sec / 60)}</span> of ${S.settings.focusMin} min</span><div class="bar"><i data-tick-bar style="width:${pct(sec, goal)}%"></i></div>`,
         side: done ? '' : `<button class="qside${S.focus.running ? ' on' : ''}" data-act="work.toggle" aria-label="Start or pause focus"><span>${S.focus.running ? PAUSE : PLAY}</span></button>` });
     }
     if (q === 'sleep') {
@@ -140,7 +140,7 @@ export function render() {
   ${backupDue() && !driveConnected() ? `<button class="banner" data-act="backup.now">Drive backup due · tap to back up</button>` : ''}
   <div class="top">
     <div><div class="lbl">${DOW[now.getDay()]} · ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-      <h1 class="h">${greeting()},<br>${esc(S.profile.name)}</h1></div>
+      <h1 class="h">${S.profile.name ? `${greeting()},<br>${esc(S.profile.name)}` : `Good<br>${greeting().toLowerCase()}`}</h1></div>
     <button data-act="nav.go" data-tab="status" aria-label="Profile">${rankRing()}</button>
   </div>
   <div class="xprow">

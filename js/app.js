@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 7;
+const APP_VERSION = 9;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -14,6 +14,7 @@ import * as Work from './views/work.js';
 import * as Status from './views/status.js';
 import * as Settings from './views/settings.js';
 import './views/coach.js';
+import { openOnboarding } from './views/onboard.js';
 import { autoBackup } from './backup.js';
 
 const VIEWS = { quests: Quests, food: Food, train: Train, work: Work, status: Status, settings: Settings };
@@ -101,10 +102,7 @@ window.addEventListener('pagehide', () => flush());
   rerender();
   showPenalties(reports);
   if (!storageOK) notice({ title: 'Storage unavailable', html: '<div class="msg sm">This browser is blocking storage, so nothing will be saved after you close it. Open the app from its installed icon or a normal browser tab.</div>', btn: 'OK' });
-  if (!S.seenWelcome) {
-    S.seenWelcome = true; save();
-    notice({ title: 'The System', html: `<div class="msg sm">Your daily quests reset at midnight. Miss one and you lose XP and your streak. Three missed days in a row costs you a rank.<br><br>Before you rely on it, check these in <b>Status → Settings</b>: your Gemini key, your split and your bedtime. Then fix the estimated macros in <b>Food → My Meals</b>.</div>`, btn: 'Begin' });
-  }
+  if (!S.onboarded) openOnboarding();
   if (S.appVersion && S.appVersion < APP_VERSION) toast('The System updated. New features are live.');
   if (S.appVersion !== APP_VERSION) { S.appVersion = APP_VERSION; save(); }
   lastDay = new Date().toDateString();

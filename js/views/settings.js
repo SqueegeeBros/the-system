@@ -54,6 +54,8 @@ export function render() {
     <div class="ptitle"><span>Rules</span></div>
     <div class="grid2">${numField('XP lost per missed quest', 'settings.penaltyXP', s.penaltyXP, 5)}${numField('Pause days per month', 'settings.pausesPerMonth', s.pausesPerMonth)}</div>
     <label class="field"><span>Your name</span><input value="${esc(S.profile.name)}" data-chg="set.str" data-path="profile.name"></label>
+    <label class="field"><span>What your deep work is for (shown on the quest)</span><input value="${esc(S.profile.workLabel)}" placeholder="e.g. my business, studying" data-chg="set.str" data-path="profile.workLabel"></label>
+    <label class="field"><span>About you (the Coach reads this)</span><textarea rows="4" data-chg="set.str" data-path="profile.about" placeholder="Age, goal, schedule, budget, job, anything the Coach should know">${esc(S.profile.about)}</textarea></label>
   </section>
 
   <section class="panel">

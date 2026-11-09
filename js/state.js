@@ -6,13 +6,13 @@ export const S = {};            // the live state object (mutated in place)
 let mirrorFn = () => null;     // set by engine: small status record the service worker reads
 export const setMirror = fn => { mirrorFn = fn; };
 
-const ex = (id, name, sets, reps, rest) => ({ id, name, sets, reps, rest });
 
 export function defaults() {
   return {
     v: 1,
     createdAt: Date.now(),
-    profile: { name: 'Nathan' },
+    profile: { name: '', about: '', workLabel: '' },
+    onboarded: false,
     settings: {
       targets: { kcal: 3300, p: 180, c: 440, f: 90, waterOz: 120 },
       // weekday (0=Sun) -> template key; missing = rest day
@@ -24,7 +24,7 @@ export function defaults() {
       checkinOpens: '17:00',
       penaltyXP: 30,
       pausesPerMonth: 4,
-      allergens: ['peanut'],
+      allergens: [],
       geminiKey: '',
       geminiModel: 'gemini-flash-latest',
       driveClientId: '',
@@ -34,23 +34,9 @@ export function defaults() {
       level: 1, xp: 0, totalXP: 0, streak: 0, bestStreak: 0, missStreak: 0,
       stats: { STR: 10, VIT: 10, INT: 10, DIS: 10 },
     },
-    meals: [
-      { id: 'm-ricecakes', name: 'Rice cakes ×2', tag: 'Pre-gym', kcal: 70, p: 1, c: 15, f: 0, servings: 1,
-        ingredients: [{ item: 'Rice cakes', qty: 2, unit: '' }], pinned: true, estimate: true, prep: { on: true, batches: 5 } },
-      { id: 'm-eggs', name: '4 eggs + sausage', tag: 'Post-gym', kcal: 455, p: 33, c: 2, f: 34, servings: 1,
-        ingredients: [{ item: 'Eggs', qty: 4, unit: '' }, { item: 'Sausage', qty: 1, unit: 'serving' }], pinned: true, estimate: true, prep: { on: true, batches: 5 } },
-      { id: 'm-beefrice', name: 'Beef & rice bowl', tag: 'Lunch', kcal: 700, p: 54, c: 72, f: 17, servings: 5,
-        ingredients: [{ item: 'Lean ground beef', qty: 2.5, unit: 'lb' }, { item: 'Rice (dry)', qty: 1, unit: 'lb' }, { item: 'Frozen vegetables', qty: 1, unit: 'large bag' }],
-        pinned: true, estimate: true, prep: { on: true, batches: 1 } },
-      { id: 'm-oats', name: 'Overnight oats', tag: 'Breakfast', kcal: 605, p: 39, c: 96, f: 9, servings: 1,
-        ingredients: [{ item: 'Oats (dry)', qty: 1, unit: 'cup' }, { item: 'Greek yogurt', qty: 1, unit: 'cup' }, { item: 'Milk', qty: 0.5, unit: 'cup' },
-          { item: 'Berries', qty: 0.5, unit: 'cup' }, { item: 'Honey', qty: 1, unit: 'tbsp' }], pinned: false, estimate: true, prep: { on: false, batches: 5 } },
-    ],
+    meals: [],
     templates: {
-      upper: { name: 'Upper', exercises: [
-        ex('e1', 'Machine chest press', 3, '8–12', 150), ex('e2', 'Lat pulldown', 3, '8–12', 150), ex('e3', 'Seated cable row', 3, '8–12', 150),
-        ex('e4', 'Incline dumbbell press', 3, '8–12', 150), ex('e5', 'Lateral raises', 3, '12–20', 90),
-        ex('e6', 'Rope triceps pushdown', 3, '10–15', 90), ex('e7', 'Dumbbell biceps curl', 3, '10–15', 90)] },
+      upper: { name: 'Upper', exercises: [] },
       lower: { name: 'Lower', exercises: [] },
       push: { name: 'Push', exercises: [] },
       pull: { name: 'Pull', exercises: [] },
@@ -61,11 +47,7 @@ export function defaults() {
     activeWorkout: null,
     prs: {},               // exercise name (lowercase) -> {e1rm, w, r, date}
     focus: { running: false, startedAt: null, date: null },
-    bizTasks: [
-      { id: 'b1', name: 'Follow up with every open quote' },
-      { id: 'b2', name: 'Reach out to 5 new prospects' },
-      { id: 'b3', name: 'Post one before/after' },
-    ],
+    bizTasks: [],
     milestones: [],
     weights: [],           // {date, lb}
     shopping: { extras: [], checked: {} },
@@ -90,6 +72,7 @@ function merge(base, saved) {
   const out = { ...base, ...saved };
   out.settings = { ...base.settings, ...(saved.settings || {}) };
   out.settings.targets = { ...base.settings.targets, ...((saved.settings || {}).targets || {}) };
+  out.profile = { ...base.profile, ...(saved.profile || {}) };
   out.hunter = { ...base.hunter, ...(saved.hunter || {}) };
   out.hunter.stats = { ...base.hunter.stats, ...((saved.hunter || {}).stats || {}) };
   out.templates = { ...base.templates, ...(saved.templates || {}) };
@@ -102,6 +85,14 @@ function merge(base, saved) {
 export async function load() {
   const saved = await kvGet('state');
   replace(merge(defaults(), saved));
+  if (saved && saved.onboarded === undefined) {
+    // existing install from before onboarding existed
+    S.onboarded = true;
+    if (S.profile.name === 'Nathan') {
+      if (!S.profile.workLabel) S.profile.workLabel = 'Squeegee Bros';
+      if (!S.profile.about) S.profile.about = "19, 6'4\", lean bulk for muscle. Lifts 5 days a week around 4–5 AM before technical school. Meal-preps on a budget (Aldi/Walmart). Runs Squeegee Bros, an exterior-cleaning business (windows, gutters, pressure washing), and struggles with distraction during work time. Never suggest peanut butter or peanuts.";
+    }
+  }
   return S;
 }
 

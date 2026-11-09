@@ -10,7 +10,7 @@ function timed(ms) { const c = new AbortController(); setTimeout(() => c.abort()
 
 async function request(model, parts, schema) {
   const res = await fetch(`${BASE}${encodeURIComponent(model)}:generateContent`, {
-    signal: timed(45000),
+    signal: timed(30000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.settings.geminiKey.trim() },
     body: JSON.stringify({
@@ -34,23 +34,36 @@ async function request(model, parts, schema) {
   }
 }
 
-async function call(parts, schema) {
-  if (!hasKey()) throw new Error('Add your free Gemini API key in Status → Settings first.');
-  const model = S.settings.geminiModel?.trim() || 'gemini-flash-latest';
-  try {
-    return await request(model, parts, schema);
-  } catch (e) {
-    // If the main model is limited or unavailable on the free tier, try Flash-Lite once.
-    if ([403, 404, 429].includes(e.status) && model !== FALLBACK) {
-      try { return await request(FALLBACK, parts, schema); } catch (e2) { e = e2; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const BUSY = [500, 502, 503, 504];
+
+// Tries the main model, then Flash-Lite. Busy servers (5xx) get two quick retries before moving on.
+async function withRetry(models, fn) {
+  let last;
+  for (const m of [...new Set(models)]) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { return await fn(m); }
+      catch (e) {
+        last = e;
+        if (BUSY.includes(e.status) || e.name === 'AbortError') { if (attempt < 2) { await sleep(1500 * (attempt + 1)); continue; } break; }
+        if ([403, 404, 429].includes(e.status)) break;
+        throw friendly(e);
+      }
     }
-    throw friendly(e);
   }
+  throw friendly(last);
+}
+
+async function call(parts, schema) {
+  if (!hasKey()) throw new Error('Add your free Gemini API key in Profile → Settings first.');
+  const model = S.settings.geminiModel?.trim() || 'gemini-flash-latest';
+  return withRetry([model, FALLBACK], m => request(m, parts, schema));
 }
 
 function friendly(e) {
   if (e.name === 'AbortError') return new Error('Gemini took too long to answer. Try again in a moment.');
   if (!e.status) return e.message?.includes('Failed to fetch') ? new Error('No connection. Log manually or try again when online.') : e;
+  if (BUSY.includes(e.status)) return new Error('Google’s AI servers are overloaded right now. That’s on Google’s end, not your key. Try again in a minute, or log manually.');
   if (e.status === 429) return new Error('Free-tier limit reached for now. Try again later, or log manually.');
   if (e.status === 400 && /api key/i.test(e.body)) return new Error('Gemini rejected the API key. Check it in Settings.');
   if (e.status === 403) return new Error('This key can’t use that model. Check the key and model in Settings.');
@@ -136,15 +149,14 @@ ${context}`;
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents,
       generationConfig: { responseMimeType: 'application/json', responseSchema: schema } }),
   });
-  // Chat uses the fast Flash-Lite model first; falls back to the main model if Lite is unavailable.
+  // Chat uses the fast Flash-Lite model first, then the main model; busy servers are retried.
   const main = S.settings.geminiModel?.trim() || 'gemini-flash-latest';
-  let res, err;
-  for (const model of [FALLBACK, main]) {
-    try { res = await body(model); } catch (e) { err = e; res = null; continue; }
-    if (res.ok || ![403, 404, 429].includes(res.status)) break;
-  }
-  if (!res) throw (err?.name === 'AbortError' ? new Error('Coach took too long to answer. Try again.') : new Error('No connection. Try again when you’re online.'));
-  if (!res.ok) { const e = new Error(); e.status = res.status; e.body = await res.text().catch(() => ''); throw friendly(e); }
+  const res = await withRetry([FALLBACK, main], async m => {
+    let r;
+    try { r = await body(m); } catch (e) { if (e.name === 'AbortError') throw e; const n = new Error('offline'); n.offline = true; throw n; }
+    if (!r.ok) { const e = new Error(); e.status = r.status; e.body = await r.text().catch(() => ''); throw e; }
+    return r;
+  }).catch(e => { throw e.offline ? new Error('No connection. Try again when you’re online.') : e; });
   const j = await res.json();
   const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
   try { return JSON.parse(text); } catch { return { reply: text || 'No answer. Try rephrasing.', foods: [] }; }

@@ -24,7 +24,7 @@ export async function startScan(video, onCode) {
 }
 
 export async function lookup(code) {
-  const fields = 'product_name,brands,serving_size,serving_quantity,nutriments,allergens_tags,traces_tags,ingredients_text';
+  const fields = 'product_name,brands,serving_size,serving_quantity,product_quantity,quantity,nutriments,allergens_tags,traces_tags,ingredients_text';
   const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${fields}`);
   if (!r.ok && r.status !== 404) throw new Error('Lookup failed. Check your connection.');
   const j = await r.json().catch(() => ({}));
@@ -38,6 +38,7 @@ export async function lookup(code) {
   return {
     code, name: p.product_name || 'Unnamed product', brand: (p.brands || '').split(',')[0].trim(),
     servingSize: p.serving_size || '', servingG: parseFloat(p.serving_quantity) || null,
+    packageG: parseFloat(p.product_quantity) || null, packageLabel: p.quantity || '',
     per100, perServing,
     peanut: /peanut/i.test(tags) || /peanut/i.test(p.ingredients_text || ''),
   };

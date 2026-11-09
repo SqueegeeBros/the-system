@@ -66,12 +66,19 @@ export const sheetOpen = () => $('#sheet')?.classList.contains('show');
 
 // ---------- Toast ----------
 let toastT = null;
-export function toast(text) {
+export function toast(text, action) {
   const el = $('#toast');
-  el.textContent = text;
-  el.className = 'toast show';
+  el.innerHTML = '';
+  el.append(document.createTextNode(text));
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'toastbtn'; b.textContent = action.label;
+    b.onclick = () => { el.className = 'toast'; action.run(); };
+    el.append(b);
+  }
+  el.className = 'toast show' + (action ? ' act' : '');
   clearTimeout(toastT);
-  toastT = setTimeout(() => (el.className = 'toast'), 2400);
+  toastT = setTimeout(() => (el.className = 'toast'), action ? 4500 : 2400);
 }
 
 export const busy = text => `<div class="busy"><div class="spin"></div><div>${esc(text)}</div></div>`;

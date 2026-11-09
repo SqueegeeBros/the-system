@@ -30,20 +30,85 @@ async function allergenGate(flag, name) {
 }
 
 // ---------- Logging ----------
+// Every entry keeps its per-unit "base" macros and an amount, so it can be resized later.
+// mode 'serving': amount = servings (or portions); mode 'gram': amount = grams, base is per 100 g.
 export async function logEntry(entry, flag) {
   if (!(await allergenGate(flag, entry.name))) return false;
-  const e = { id: uid(), t: Date.now(), name: entry.name, kcal: Math.round(num(entry.kcal)), p: r1(entry.p), c: r1(entry.c), f: r1(entry.f), src: entry.src || 'manual' };
+  const mode = entry.mode || 'serving';
+  const amount = num(entry.amount) || (mode === 'gram' ? 100 : 1);
+  const base = entry.base || { kcal: num(entry.kcal), p: num(entry.p), c: num(entry.c), f: num(entry.f) };
+  const e = { id: uid(), t: Date.now(), name: entry.name, src: entry.src || 'manual', mode, amount, base,
+    container: entry.container || null, servingG: entry.servingG || null };
+  applyAmount(e);
   day().food.push(e);
   save(); E.sync(); rerender();
-  toast(`Logged ${e.name} · ${e.kcal} kcal · ${e.p}g protein`);
+  toast(`Logged ${e.name}${amountLabel(e) ? ' ' + amountLabel(e) : ''} · ${e.kcal} kcal`, { label: 'Change amount', run: () => amountSheet(e.id) });
   return true;
 }
+
+function factorOf(e) { return e.mode === 'gram' ? e.amount / 100 : e.amount; }
+function applyAmount(e) {
+  const k = factorOf(e);
+  e.kcal = Math.round(e.base.kcal * k); e.p = r1(e.base.p * k); e.c = r1(e.base.c * k); e.f = r1(e.base.f * k);
+}
+const frac = n => ({ 0.25: '¼', 0.5: '½', 0.75: '¾', 1.5: '1½', 2.5: '2½' }[n] || String(r1(n)));
+export function amountLabel(e) {
+  if (!e.base) return '';
+  if (e.mode === 'gram') return e.container && Math.abs(e.amount - e.container) < 0.5 ? '· whole container' : `· ${Math.round(e.amount)} g`;
+  if (e.container && Math.abs(e.amount - e.container) < 0.01) return '· whole container';
+  return e.amount === 1 ? '' : `×${frac(e.amount)}`;
+}
+
+// Amount picker: quick chips + whole container + custom
+export function amountSheet(id) {
+  const e = day().food.find(x => x.id === id);
+  if (!e) return;
+  if (!e.base) { e.base = { kcal: e.kcal, p: e.p, c: e.c, f: e.f }; e.mode = 'serving'; e.amount = 1; }
+  const gram = e.mode === 'gram';
+  const chips = gram
+    ? [...new Set([50, 100, 150, 200, e.servingG].filter(Boolean).map(Math.round))].map(g => [g, `${g} g`])
+    : [[0.25, '¼'], [0.5, '½'], [1, '1'], [1.5, '1½'], [2, '2'], [3, '3']];
+  if (e.container) chips.push([e.container, 'Whole container']);
+  sheet('How much?', `
+    <div class="rt">${esc(e.name)}</div>
+    <div class="rs">${gram ? 'Per 100 g' : e.src === 'meal' || e.src === 'barcode' ? 'Per serving' : 'Per portion'}: ${fmt(e.base.kcal)} kcal · ${r1(e.base.p)}g P</div>
+    <div class="amtchips">${chips.map(([v, l]) => `<button class="amtchip${Math.abs(v - e.amount) < 0.01 ? ' on' : ''}" data-v="${v}">${l}</button>`).join('')}</div>
+    <label class="field"><span>${gram ? 'Grams' : 'Servings'} (exact)</span>
+      <input id="amt-in" type="number" inputmode="decimal" step="${gram ? 5 : 0.25}" value="${r1(e.amount)}"></label>
+    ${!e.container ? `<label class="field"><span>${gram ? 'Grams' : 'Servings'} in a whole container (optional, remembered)</span>
+      <input id="amt-cont" type="number" inputmode="decimal" placeholder="e.g. ${gram ? '907' : '4'}"></label>` : ''}
+    <div class="amtprev" id="amt-prev"></div>
+    <button class="btn full mt" id="amt-save">Save</button>`, {
+    onMount: card => {
+      const inp = card.querySelector('#amt-in'), prev = card.querySelector('#amt-prev');
+      const show = () => { const t = { ...e, amount: num(inp.value) }; applyAmount(t);
+        prev.innerHTML = `<b>${fmt(t.kcal)}</b> kcal · <b>${r1(t.p)}</b>g P · ${r1(t.c)}C · ${r1(t.f)}F`; };
+      card.querySelectorAll('.amtchip').forEach(b => b.onclick = () => {
+        inp.value = b.dataset.v; card.querySelectorAll('.amtchip').forEach(x => x.classList.toggle('on', x === b)); show(); });
+      inp.oninput = show; show();
+      card.querySelector('#amt-save').onclick = () => {
+        const v = num(inp.value); if (v <= 0) return toast('Enter an amount.');
+        const cont = num(card.querySelector('#amt-cont')?.value);
+        if (cont > 0) {
+          e.container = cont;
+          const m = e.mealId && S.meals.find(x => x.id === e.mealId);
+          if (m && !gram) m.container = cont;   // remember on the saved meal
+        }
+        e.amount = v; applyAmount(e);
+        save(); E.sync(); closeSheet(); rerender(); toast(`Updated · ${e.kcal} kcal`);
+      };
+    },
+  });
+}
+reg('food.amount', el => amountSheet(el.dataset.id));
 
 export async function logMeal(id, servings = 1) {
   const m = S.meals.find(x => x.id === id);
   if (!m) return;
   const s = num(servings) || 1;
-  return logEntry({ name: s === 1 ? m.name : `${m.name} ×${r1(s)}`, kcal: m.kcal * s, p: m.p * s, c: m.c * s, f: m.f * s, src: 'meal' }, mealHasAllergen(m));
+  const ok = await logEntry({ name: m.name, base: { kcal: m.kcal, p: m.p, c: m.c, f: m.f }, amount: s, mode: 'serving', container: m.container || null, src: 'meal' }, mealHasAllergen(m));
+  if (ok) { const e = day().food[day().food.length - 1]; e.mealId = m.id; save(); }
+  return ok;
 }
 
 // ---------- Shared quick log panel (also on Quests tab) ----------
@@ -124,7 +189,8 @@ function todayView() {
   <section class="panel">
     <div class="ptitle"><span>Logged</span></div>
     ${entries.length ? entries.map(e => `<div class="row">
-      <div class="grow"><div class="rt">${esc(e.name)}</div><div class="rs">${timeStr(e.t)} · ${fmt(e.kcal)} kcal · ${r1(e.p)}P / ${r1(e.c)}C / ${r1(e.f)}F</div></div>
+      <button class="grow entrybtn" ${editable ? `data-act="food.amount" data-id="${e.id}"` : 'disabled'}><div class="rt">${esc(e.name)} <span class="amt">${esc(amountLabel(e))}</span></div>
+        <div class="rs">${timeStr(e.t)} · ${fmt(e.kcal)} kcal · ${r1(e.p)}P / ${r1(e.c)}C / ${r1(e.f)}F${editable ? ' · <u>change amount</u>' : ''}</div></button>
       ${editable ? `<button class="iconbtn red" data-act="food.del" data-id="${e.id}" aria-label="Remove">×</button>` : ''}</div>`).join('')
       : `<div class="empty">${editable ? 'Nothing logged yet today.' : 'Nothing was logged this day.'}</div>`}
     ${!editable ? `<div class="note">Past days are read-only. Penalties for them are already settled.</div>` : ''}
@@ -243,7 +309,7 @@ reg('food.photolog', async el => {
   const sum = rows.reduce((a, r) => ({ kcal: a.kcal + r.kcal, p: a.p + r.p, c: a.c + r.c, f: a.f + r.f }), { kcal: 0, p: 0, c: 0, f: 0 });
   const name = rows.length === 1 ? rows[0].name : rows.map(r => r.name).join(' + ');
   closeSheet();
-  await logEntry({ name: name.slice(0, 60), ...sum, src: 'photo' }, el.dataset.peanut ? 'peanut' : null);
+  await logEntry({ name: name.slice(0, 60), base: sum, amount: 1, src: 'photo' }, el.dataset.peanut ? 'peanut' : null);
 });
 
 // ---------- Barcode ----------
@@ -282,14 +348,29 @@ async function bcLookup(code) {
   out.innerHTML = `
     ${wasPeanut ? `<div class="alert">This product lists <b>peanut</b> (or traces).</div>` : ''}
     <div class="rt mt">${esc(product.name)}</div><div class="rs">${esc(product.brand)}${product.servingSize ? ` · serving ${esc(product.servingSize)}` : ''}</div>
-    <div class="inline mt">
+    <div class="amtchips">${bcChips(useServ).map(([v, l]) => `<button class="amtchip${l === (useServ ? '1' : '') ? ' on' : ''}" data-bcv="${v}">${l}</button>`).join('')}</div>
+    <div class="inline">
       <label class="field grow"><span>${useServ ? 'Servings' : 'Grams'}</span>
-        <input id="bc-amt" type="number" inputmode="decimal" value="${useServ ? 1 : product.servingG || 100}" step="${useServ ? 0.5 : 5}"></label>
+        <input id="bc-amt" type="number" inputmode="decimal" value="${useServ ? 1 : product.servingG || 100}" step="${useServ ? 0.25 : 5}"></label>
     </div>
     <div class="bcmacro" id="bc-macro"></div>
     <div class="btnrow mt"><button class="btn ghost" data-act="food.bcsave">Save as meal</button><button class="btn" data-act="food.bclog">Log</button></div>`;
   const upd = () => { const m = bcMacros(); $('#bc-macro').textContent = `${fmt(m.kcal)} kcal · ${r1(m.p)}P / ${r1(m.c)}C / ${r1(m.f)}F`; };
   $('#bc-amt').oninput = upd; upd();
+  out.querySelectorAll('[data-bcv]').forEach(btn => btn.onclick = () => {
+    $('#bc-amt').value = btn.dataset.bcv; out.querySelectorAll('[data-bcv]').forEach(x => x.classList.toggle('on', x === btn)); upd(); });
+}
+function bcContainer(useServ) {
+  if (!product.packageG) return null;
+  if (!useServ) return product.packageG;
+  return product.servingG ? r1(product.packageG / product.servingG) : null;
+}
+function bcChips(useServ) {
+  const c = bcContainer(useServ), label = product.packageLabel ? `Whole container (${product.packageLabel})` : 'Whole container';
+  const list = useServ ? [[0.5, '½'], [1, '1'], [1.5, '1½'], [2, '2'], [3, '3']]
+    : [...new Set([50, 100, product.servingG, 200].filter(Boolean).map(Math.round))].map(g => [g, `${g} g`]);
+  if (c) list.push([c, label]);
+  return list;
 }
 function bcMacros() {
   const amt = num($('#bc-amt')?.value);
@@ -298,14 +379,18 @@ function bcMacros() {
 }
 const bcName = () => { const amt = num($('#bc-amt').value); return `${product.name}${product.perServing ? (amt !== 1 ? ` ×${r1(amt)}` : '') : ` (${r1(amt)} g)`}`; };
 reg('food.bclog', async () => {
-  const m = bcMacros(), name = bcName(), flag = product.peanut ? 'peanut' : allergenHit(product.name);
+  const useServ = !!product.perServing, flag = product.peanut ? 'peanut' : allergenHit(product.name);
+  const base = product.perServing || product.per100;
+  const entry = { name: product.name, base: { kcal: base.kcal, p: base.p, c: base.c, f: base.f }, mode: useServ ? 'serving' : 'gram',
+    amount: num($('#bc-amt').value), container: bcContainer(useServ), servingG: product.servingG, src: 'barcode' };
   closeSheet();
-  await logEntry({ name, ...m, src: 'barcode' }, flag);
+  await logEntry(entry, flag);
 });
 reg('food.bcsave', () => {
   const m = bcMacros();
   S.meals.push({ id: uid(), name: bcName(), tag: 'Snack', kcal: Math.round(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f), servings: 1,
-    ingredients: [{ item: product.name, qty: 1, unit: '' }], pinned: false, estimate: false, peanut: product.peanut, prep: { on: false, batches: 1 } });
+    ingredients: [{ item: product.name, qty: 1, unit: '' }], pinned: false, estimate: false, peanut: product.peanut, prep: { on: false, batches: 1 },
+    container: product.perServing ? bcContainer(true) : null });
   save(); toast('Saved to My Meals');
 });
 
@@ -364,6 +449,8 @@ function mealEditor(meal, fromAI = null) {
       <label class="field"><span>Type</span><select id="me-tag">${TAGS.map(t => `<option ${t === m.tag ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="field"><span>Batch makes (servings)</span><input id="me-serv" type="number" inputmode="numeric" min="1" value="${m.servings || 1}"></label>
     </div>
+    <label class="field"><span>Servings in a whole container (optional, e.g. a yogurt tub = 4)</span>
+      <input id="me-cont" type="number" inputmode="decimal" value="${m.container || ''}" placeholder="Leave empty if not packaged"></label>
     ${editing ? `<label class="check"><input type="checkbox" id="me-scale" checked> If I change the batch size, recalculate per-serving macros</label>` : ''}
     <div class="sub mt">Per serving</div>
     <div class="grid4">
@@ -395,7 +482,8 @@ function mealEditor(meal, fromAI = null) {
           item: r.querySelector('.ig-item').value.trim(), qty: num(r.querySelector('.ig-qty').value), unit: r.querySelector('.ig-unit').value.trim(),
         })).filter(i => i.item);
         const data = { name, tag: card.querySelector('#me-tag').value, servings, kcal: Math.round(k), p: r1(p), c: r1(c), f: r1(f), ingredients,
-          pinned: card.querySelector('#me-pin').checked, estimate: !!fromAI, peanut: !!fromAI?.peanut };
+          pinned: card.querySelector('#me-pin').checked, estimate: !!fromAI, peanut: !!fromAI?.peanut,
+          container: num(card.querySelector('#me-cont').value) || null };
         if (editing) Object.assign(meal, data, { estimate: false, peanut: meal.peanut && data.peanut });
         else S.meals.push({ id: uid(), prep: { on: false, batches: 1 }, ...data });
         save(); closeSheet(); rerender();

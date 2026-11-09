@@ -438,3 +438,16 @@ input[type=number]{-moz-appearance:textfield}
 .shutter:active{transform:scale(.94)}
 .camside{width:50px;height:50px;border-radius:50%;background:var(--card2);border:1px solid var(--line2);display:grid;place-items:center;cursor:pointer}
 .camside svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.6}
+
+/* Amount picker */
+.amtchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.amtchip{padding:10px 14px;border-radius:99px;background:var(--card2);border:1px solid var(--line2);font:700 15px var(--h);letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.amtchip.on{background:#fff;color:#000;border-color:#fff}
+.amtprev{margin-top:14px;text-align:center;font-size:14px;color:var(--muted)}
+.amtprev b{font:800 24px var(--h);color:#fff}
+.entrybtn{text-align:left;cursor:pointer;min-width:0}
+.entrybtn[disabled]{cursor:default}
+.entrybtn u{color:var(--acc1);text-decoration:none}
+.amt{color:var(--acc1);font-size:14px}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px}
+.toastbtn{background:#000;color:#fff;border-radius:99px;padding:8px 12px;font:700 13px var(--h);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}

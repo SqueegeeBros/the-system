@@ -6,8 +6,11 @@ const FALLBACK = 'gemini-flash-lite-latest';
 
 export const hasKey = () => !!S.settings.geminiKey?.trim();
 
+function timed(ms) { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; }
+
 async function request(model, parts, schema) {
   const res = await fetch(`${BASE}${encodeURIComponent(model)}:generateContent`, {
+    signal: timed(45000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.settings.geminiKey.trim() },
     body: JSON.stringify({
@@ -46,6 +49,7 @@ async function call(parts, schema) {
 }
 
 function friendly(e) {
+  if (e.name === 'AbortError') return new Error('Gemini took too long to answer. Try again in a moment.');
   if (!e.status) return e.message?.includes('Failed to fetch') ? new Error('No connection. Log manually or try again when online.') : e;
   if (e.status === 429) return new Error('Free-tier limit reached for now. Try again later, or log manually.');
   if (e.status === 400 && /api key/i.test(e.body)) return new Error('Gemini rejected the API key. Check it in Settings.');
@@ -126,15 +130,20 @@ ${context}`;
     required: ['reply'],
   };
   const body = (model) => fetch(`${BASE}${encodeURIComponent(model)}:generateContent`, {
+    signal: timed(30000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.settings.geminiKey.trim() },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents,
       generationConfig: { responseMimeType: 'application/json', responseSchema: schema } }),
   });
-  const model = S.settings.geminiModel?.trim() || 'gemini-flash-latest';
-  let res = await body(model).catch(() => null);
-  if (res && [403, 404, 429].includes(res.status) && model !== FALLBACK) res = await body(FALLBACK).catch(() => null);
-  if (!res) throw new Error('No connection. Try again when you’re online.');
+  // Chat uses the fast Flash-Lite model first; falls back to the main model if Lite is unavailable.
+  const main = S.settings.geminiModel?.trim() || 'gemini-flash-latest';
+  let res, err;
+  for (const model of [FALLBACK, main]) {
+    try { res = await body(model); } catch (e) { err = e; res = null; continue; }
+    if (res.ok || ![403, 404, 429].includes(res.status)) break;
+  }
+  if (!res) throw (err?.name === 'AbortError' ? new Error('Coach took too long to answer. Try again.') : new Error('No connection. Try again when you’re online.'));
   if (!res.ok) { const e = new Error(); e.status = res.status; e.body = await res.text().catch(() => ''); throw friendly(e); }
   const j = await res.json();
   const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');

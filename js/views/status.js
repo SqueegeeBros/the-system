@@ -6,6 +6,7 @@ import { reg, regChg, rerender, go } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast } from '../ui.js';
 import { photoAdd, photoList, photoDel } from '../db.js';
 import { shrinkImage } from '../util.js';
+import { rankRing, medalsHTML } from './quests.js';
 
 const SIZES = { S: 'Small', M: 'Medium', L: 'Large', XL: 'Huge' };
 
@@ -30,9 +31,8 @@ export function render() {
 
   return `<div class="wrap">
   <section class="panel">
-    <div class="ptitle"><span>Hunter</span></div>
-    <div class="hero">
-      <div class="rank big">${rank}</div>
+    <div class="hero2">
+      ${rankRing(true)}
       <div class="name">${esc(S.profile.name.toUpperCase())}</div>
       <div class="sub">Rank ${rank} · Level ${h.level}</div>
     </div>
@@ -50,6 +50,11 @@ export function render() {
       <button class="btn ghost" data-act="nav.go" data-tab="settings">Settings</button>
     </div>
     <div class="note">Pause only for real sick days or emergencies. A paused day has no quests, no XP and no penalties, and your streak is frozen.</div>
+  </section>
+
+  <section class="panel">
+    <div class="ptitle"><span>Medals · ${Object.keys(S.medals || {}).length}/${E.MEDALS.length}</span></div>
+    ${medalsHTML(true)}
   </section>
 
   <section class="panel">

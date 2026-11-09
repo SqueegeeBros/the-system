@@ -23,7 +23,7 @@ export function render() {
   const s = S.settings, T = s.targets;
   const last = S.backup.lastAt ? new Date(S.backup.lastAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
   return `<div class="wrap">
-  <button class="linkbtn back" data-act="nav.go" data-tab="status">‹ Status</button>
+  <button class="linkbtn back" data-act="nav.go" data-tab="status">‹ Profile</button>
 
   <section class="panel">
     <div class="ptitle"><span>Daily targets</span></div>

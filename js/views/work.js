@@ -124,7 +124,7 @@ export function render() {
   </section>
 
   <section class="panel">
-    <div class="ptitle"><span>Side quests · Squeegee Bros</span></div>
+    <div class="ptitle"><span>Side quests</span></div>
     <div class="note">Optional daily tasks worth XP. They reset each morning and never cost you XP.</div>
     ${bizHTML()}
     ${S.bizTasks.length ? `<details class="mt"><summary class="sub">Remove side quests</summary>

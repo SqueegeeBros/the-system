@@ -67,6 +67,7 @@ export function met(q, k) {
 export function gainXP(base) {
   const h = S.hunter, g = Math.round(base * mult());
   h.xp += g; h.totalXP += g;
+  const dk = dkey(); S.xpLog = S.xpLog || {}; S.xpLog[dk] = (S.xpLog[dk] || 0) + g;
   while (h.xp >= need(h.level)) {
     h.xp -= need(h.level);
     const before = rankOf(h.level);
@@ -80,6 +81,7 @@ export function gainXP(base) {
 
 export function loseXP(n) {
   const h = S.hunter;
+  const dk = dkey(); S.xpLog = S.xpLog || {}; S.xpLog[dk] = (S.xpLog[dk] || 0) - n;
   h.totalXP = Math.max(0, h.totalXP - n);
   h.xp -= n;
   while (h.xp < 0) {
@@ -119,7 +121,49 @@ export function sync(k = dkey()) {
     logEvent(`All daily quests cleared — streak ${S.hunter.streak}`);
     notifyFn({ type: 'allclear', streak: S.hunter.streak, xp: g });
   }
+  checkMedals();
   save();
+}
+
+// ---------- Medals ----------
+const totalVolume = () => S.workouts.reduce((a, w) => a + w.exercises.reduce((b, x) => b + x.sets.reduce((c, s) => c + s.w * s.r, 0), 0), 0);
+const totalFocusH = () => Object.keys(S.days).reduce((a, k) => a + focusSecFor(k), 0) / 3600;
+const macroDays = () => Object.values(S.days).filter(d => d.paid?.nutrition).length;
+const bedDays = () => Object.values(S.days).filter(d => d.sleepAt).length;
+export const MEDALS = [
+  { id: 'first-session', icon: '1', name: 'First session', test: () => S.workouts.length >= 1 },
+  { id: 'first-pr', icon: 'PR', name: 'First record', test: () => (S.prCount || 0) >= 1 },
+  { id: 'streak-7', icon: '7', name: '7-day streak', test: () => S.hunter.bestStreak >= 7 },
+  { id: 'macro-7', icon: 'M7', name: '7 days on macros', test: () => macroDays() >= 7 },
+  { id: 'bed-7', icon: 'Z7', name: '7 nights on time', test: () => bedDays() >= 7 },
+  { id: 'focus-10', icon: '10h', name: '10 hours deep work', test: () => totalFocusH() >= 10 },
+  { id: 'vol-10k', icon: '10K', name: '10,000 lb lifted', test: () => totalVolume() >= 10000 },
+  { id: 'sessions-20', icon: '20', name: '20 sessions', test: () => S.workouts.length >= 20 },
+  { id: 'rank-d', icon: 'D', name: 'Reach Rank D', test: () => S.hunter.level >= 10 },
+  { id: 'streak-30', icon: '30', name: '30-day streak', test: () => S.hunter.bestStreak >= 30 },
+  { id: 'pr-10', icon: '10PR', name: '10 records', test: () => (S.prCount || 0) >= 10 },
+  { id: 'focus-50', icon: '50h', name: '50 hours deep work', test: () => totalFocusH() >= 50 },
+  { id: 'vol-100k', icon: '100K', name: '100,000 lb lifted', test: () => totalVolume() >= 100000 },
+  { id: 'macro-30', icon: 'M30', name: '30 days on macros', test: () => macroDays() >= 30 },
+  { id: 'rank-c', icon: 'C', name: 'Reach Rank C', test: () => S.hunter.level >= 20 },
+  { id: 'streak-100', icon: '100', name: '100-day streak', test: () => S.hunter.bestStreak >= 100 },
+];
+export function checkMedals() {
+  S.medals = S.medals || {};
+  for (const m of MEDALS) {
+    if (!S.medals[m.id] && m.test()) {
+      S.medals[m.id] = dkey();
+      logEvent(`Medal earned: ${m.name}`);
+      notifyFn({ type: 'medal', medal: m });
+    }
+  }
+}
+export function weekXP(offsetWeeks = 0) {
+  const today = dkey(), back = (parseKey(today).getDay() + 6) % 7;
+  const monday = addDays(today, -back - 7 * offsetWeeks);
+  let sum = 0; const days = [];
+  for (let i = 0; i < 7; i++) { const k = addDays(monday, i); days.push(k); sum += (S.xpLog?.[k] || 0); }
+  return { sum, days };
 }
 
 export function questLabel(q, k) {

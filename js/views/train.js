@@ -4,6 +4,7 @@ import * as E from '../engine.js';
 import { $, esc, uid, dkey, DOW, DOW3, fmt, num, r1, clock, niceDate, lineChart } from '../util.js';
 import { reg, regChg, regTick, nav, rerender, go } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast } from '../ui.js';
+import { programCard } from './quests.js';
 
 const e1rm = (w, r) => (w > 0 && r > 0 ? w * (1 + r / 30) : 0);
 const norm = s => String(s || '').trim().toLowerCase();
@@ -113,6 +114,7 @@ reg('train.log', el => {
   const best = S.prs[norm(ex.name)], val = e1rm(num(s.w), num(s.r));
   if (best && val > best.e1rm && !ex.pr) {
     ex.pr = true;
+    S.prCount = (S.prCount || 0) + 1;
     const g = E.gainXP(E.PR_XP);
     notice({ title: 'New record', html: `<div class="msg"><em>${esc(ex.name)}</em><br>${num(s.w)} lb × ${num(s.r)}</div>
       <div class="rw">EST. 1RM ${r1(val)} LB (WAS ${best.e1rm}) · +${g} XP</div>`, btn: 'Keep going' });
@@ -308,16 +310,7 @@ export function render() {
   }).filter(p => p.y > 0).slice(-20) : [];
 
   return `<div class="wrap">
-  <section class="panel">
-    <div class="ptitle"><span>Today</span></div>
-    ${tpl ? `<div class="bigline"><div><b>${esc(tpl.name)}</b><span> · ${DOW[wd]}</span></div></div>
-      <div class="note">${tpl.exercises.length ? tpl.exercises.map(e => esc(e.name)).join(' · ') : 'No exercises saved for this day yet. Start the session and add them as you go.'}</div>
-      ${doneToday ? `<div class="donebox">Session complete. Quest cleared.</div><button class="btn ghost full mt" data-act="train.start" data-tpl="${key}">Log another session</button>`
-        : `<button class="btn full mt" data-act="train.start" data-tpl="${key}">Start ${esc(tpl.name)} session</button>`}`
-      : `<div class="bigline"><div><b>Rest day</b><span> · ${DOW[wd]}</span></div></div>
-      <div class="note">Recovery is where you grow. Eat your targets and get to bed on time.</div>
-      <button class="btn ghost full mt" data-act="train.start">Train anyway</button>`}
-  </section>
+  ${programCard(k)}
 
   <section class="panel">
     <div class="ptitle"><span>Weekly split</span></div>

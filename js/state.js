@@ -74,6 +74,9 @@ export function defaults() {
     backup: { lastAt: 0, fileId: null },
     events: [],            // recent system log
     chat: [],              // coach conversation
+    xpLog: {},             // date -> net XP
+    medals: {},            // medal id -> date earned
+    prCount: 0,
   };
 }
 

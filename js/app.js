@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 4;
+const APP_VERSION = 5;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -34,6 +34,7 @@ nav.render = () => {
 E.onNotice(n => {
   if (n.type === 'quest') notice({ title: 'Quest complete', html: `<div class="msg">Quest cleared: <em>${esc(n.label)}</em></div><div class="rw">+${n.xp} XP · ${n.stat} +1</div>` });
   if (n.type === 'allclear') notice({ title: 'Daily quest complete', html: `<div class="msg">Every daily quest is cleared.<br>Streak: <em>${n.streak} day${n.streak > 1 ? 's' : ''}</em></div><div class="rw">BONUS +${n.xp} XP · MULTIPLIER ×${E.mult().toFixed(1)}</div>`, btn: 'Well done' });
+  if (n.type === 'medal') notice({ title: 'Medal earned', tone: 'levelup', html: `<div class="medalbig"><div class="m">${esc(n.medal.icon)}</div></div><div class="msg">${esc(n.medal.name)}</div>`, btn: 'Nice' });
   if (n.type === 'levelup') notice({ title: 'Level up', tone: 'levelup', html: `<div class="msg"><span class="gold">${n.rankUp ? `Promoted to Rank ${n.rankUp}` : 'Level up'}</span>You are now level <em>${n.level}</em>.</div><div class="rw">KEEP THE STANDARD</div>` });
 });
 

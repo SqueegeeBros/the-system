@@ -7,6 +7,7 @@ import { notice, confirmBox, sheet, closeSheet, toast } from '../ui.js';
 import { photoAdd, photoList, photoDel } from '../db.js';
 import { shrinkImage } from '../util.js';
 import { rankRing, medalsHTML } from './quests.js';
+import { takePhoto } from '../camera.js';
 
 const SIZES = { S: 'Small', M: 'Medium', L: 'Large', XL: 'Huge' };
 
@@ -136,7 +137,7 @@ reg('status.weigh', () => {
 });
 reg('status.delweigh', el => { S.weights = S.weights.filter(w => w.date !== el.dataset.d); save(); rerender(); });
 
-reg('status.addphoto', () => $('#progress-input').click());
+reg('status.addphoto', () => takePhoto({ title: 'Progress photo', hint: 'Same spot and lighting every time.' }).then(b => b && onProgressPhoto(b)));
 export async function onProgressPhoto(file) {
   if (!file) return;
   const blob = await shrinkImage(file, 1600, 0.85);

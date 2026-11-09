@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 5;
+const APP_VERSION = 6;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';

@@ -1,8 +1,8 @@
 // Service worker: offline app shell + best-effort evening reminder.
-const VERSION = 'system-v5';
+const VERSION = 'system-v6';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/app.js', 'js/core.js', 'js/state.js', 'js/engine.js', 'js/db.js', 'js/util.js', 'js/ui.js', 'js/ai.js', 'js/barcode.js', 'js/backup.js',
+  'js/app.js', 'js/core.js', 'js/state.js', 'js/engine.js', 'js/db.js', 'js/util.js', 'js/ui.js', 'js/ai.js', 'js/barcode.js', 'js/camera.js', 'js/backup.js',
   'js/views/quests.js', 'js/views/food.js', 'js/views/train.js', 'js/views/work.js', 'js/views/status.js', 'js/views/settings.js', 'js/views/coach.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-180.png',
 ];

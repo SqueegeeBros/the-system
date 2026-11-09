@@ -6,6 +6,7 @@ import { reg, regChg, nav, rerender, go } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast, busy } from '../ui.js';
 import * as AI from '../ai.js';
 import * as BC from '../barcode.js';
+import { takePhoto } from '../camera.js';
 
 const TAGS = ['Breakfast', 'Pre-gym', 'Post-gym', 'Lunch', 'Dinner', 'Snack', 'Shake'];
 const ICON = {
@@ -192,7 +193,7 @@ reg('food.manualgo', async () => {
 // ---------- Photo AI ----------
 reg('food.photo', () => {
   if (!AI.hasKey()) return needKey();
-  $('#photo-input').click();
+  takePhoto({ title: 'Scan plate', hint: 'Fit the whole plate in the frame, from above.' }).then(b => b && onPhoto(b));
 });
 function needKey() {
   notice({ title: 'Gemini key needed', html: `<div class="msg sm">Photo scan and the AI meal builder use Google’s free Gemini tier. Add your key in <b>Status → Settings</b>. It takes about two minutes, and SETUP.md has the steps.</div>`,

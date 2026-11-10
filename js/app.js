@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -111,6 +111,24 @@ window.addEventListener('pagehide', () => flush());
   rerender();
   showPenalties(reports);
   if (!storageOK) notice({ title: 'Storage unavailable', html: '<div class="msg sm">This browser is blocking storage, so nothing will be saved after you close it. Open the app from its installed icon or a normal browser tab.</div>', btn: 'OK' });
+  // One-time: load Nathan's Lower A sheet into an empty Lower template (and an empty Lower session in progress)
+  S.migr = S.migr || {};
+  if (!S.migr.lowerA && S.profile.name === 'Nathan' && S.templates.lower) {
+    const LOWER_A = [
+      ['Leg press', 3, '8–12', 150], ['Dumbbell Romanian deadlift', 3, '8–10', 150], ['Seated leg curl', 3, '10–15', 105],
+      ['Leg extension', 2, '10–15', 105], ['Standing calf raise', 3, '10–15', 90], ['Reverse crunch', 2, '10–20', 75],
+    ];
+    if (!S.templates.lower.exercises.length) {
+      S.templates.lower.exercises = LOWER_A.map(([name, sets, reps, rest], i) => ({ id: 'la' + i, name, sets, reps, rest }));
+      const aw = S.activeWorkout;
+      if (aw && aw.tpl === 'lower' && !aw.exercises.length) {
+        aw.exercises = LOWER_A.map(([name, sets, reps, rest], i) => ({ id: 'law' + i, name, target: `${sets} × ${reps}`, rest,
+          sets: Array.from({ length: sets }, () => ({ w: '', r: '', done: false })), pr: false }));
+      }
+      toast('Lower A loaded: 6 exercises, 16 sets');
+    }
+    S.migr.lowerA = true; save();
+  }
   if (!S.onboarded) openOnboarding();
   if (S.appVersion && S.appVersion < APP_VERSION) toast('The System updated. New features are live.');
   if (S.appVersion !== APP_VERSION) { S.appVersion = APP_VERSION; save(); }

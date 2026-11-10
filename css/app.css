@@ -456,3 +456,4 @@ input[type=number]{-moz-appearance:textfield}
 html,body{max-width:100%;overflow-x:hidden}
 .bubble,.rt,.qt,.tname,.meal b,.note,.rs,.msg{overflow-wrap:anywhere}
 img,video,svg,canvas{max-width:100%}
+.exnote{margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(226,196,138,.08);border-left:2px solid var(--acc1);font-size:12.5px;line-height:1.45;color:#d9cfbd}

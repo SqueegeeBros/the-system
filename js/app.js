@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -128,6 +128,55 @@ window.addEventListener('pagehide', () => flush());
       toast('Lower A loaded: 6 exercises, 16 sets');
     }
     S.migr.lowerA = true; save();
+  }
+  // One-time: load Nathan's full 5-day program from his binder sheets
+  if (!S.migr.program1 && S.profile.name === 'Nathan') {
+    const E_ = (name, sets, reps, rest, note = '') => ({ name, sets, reps, rest, note });
+    const P = {
+      upper: ['Upper', [
+        E_('Machine chest press', 3, '8–12', 150, 'Comfortable grip.'),
+        E_('Chest-supported row', 3, '8–12', 120),
+        E_('Incline dumbbell press', 2, '8–12', 150, 'Low incline, semi-neutral grip. If uncomfortable, swap for a comfortable chest press (same sets). Skip if pressing hurts.'),
+        E_('Lat pulldown', 2, '8–12', 120, 'Medium/neutral grip.'),
+        E_('Lateral raises', 3, '12–20', 90, 'Dumbbells, pain-free range.'),
+        E_('Cable curl', 2, '10–15', 90, 'Can alternate with pressdowns: one set each, then rest 60–90 s.'),
+        E_('Rope triceps pushdown', 2, '10–15', 90)]],
+      lower: ['Lower A', [
+        E_('Leg press', 3, '8–12', 150),
+        E_('Dumbbell Romanian deadlift', 3, '8–10', 150, 'Load close, knees slightly bent, hips back, stop where you can control it without rounding. Shoulder bothered? Do 3 sets of hip-thrust machine instead.'),
+        E_('Seated leg curl', 3, '10–15', 105),
+        E_('Leg extension', 2, '10–15', 105),
+        E_('Standing calf raise', 3, '10–15', 90),
+        E_('Reverse crunch', 2, '10–20', 75)]],
+      pull: ['Pull', [
+        E_('Lat pulldown', 3, '8–12', 120, 'Medium/neutral grip.'),
+        E_('Chest-supported row', 3, '8–12', 120),
+        E_('Reverse pec deck', 2, '12–20', 90, 'Comfortable range. Skip it if it irritates the shoulder; don’t replace it.'),
+        E_('Preacher curl machine', 3, '10–15', 90, 'Upper arms supported, control the bottom, no bouncing. Cable curls if the machine doesn’t fit.'),
+        E_('Hammer curl', 2, '10–15', 90),
+        E_('Reverse crunch', 2, '10–20', 75)]],
+      push: ['Push', [
+        E_('Incline dumbbell press', 3, '8–12', 150, 'Low incline, semi-neutral grip. Incline machine or comfortable flat press can replace it. No overhead pressing, overhead triceps, dips or deep flyes this block.'),
+        E_('Machine chest press', 2, '8–12', 120),
+        E_('Lateral raises', 3, '12–20', 90, 'Dumbbells, pain-free range.'),
+        E_('Rope triceps pushdown', 3, '10–15', 90, 'Finishing early is fine. Don’t add sets to fill an hour.')]],
+      legs: ['Lower B', [
+        E_('Hack squat', 3, '8–12', 150, 'Only if the pads/setup are comfortable; otherwise leg press.'),
+        E_('Seated leg curl', 3, '10–15', 105),
+        E_('Leg extension', 2, '10–15', 105),
+        E_('Hip-thrust machine', 2, '8–12', 120),
+        E_('Standing calf raise', 3, '10–15', 90, 'Pads bother the shoulder? Straight-knee calf press on the leg press, or seated calf raises.'),
+        E_('Reverse crunch', 2, '10–20', 75)]],
+    };
+    for (const [key, [name, list]] of Object.entries(P)) {
+      S.templates[key] = { name, exercises: list.map((x, i) => ({ id: key + i, ...x })) };
+    }
+    S.settings.split = { 1: 'upper', 2: 'lower', 3: 'pull', 4: 'push', 5: 'legs' };
+    // add notes to a Lower session already in progress
+    const aw = S.activeWorkout;
+    if (aw && aw.tpl === 'lower') { aw.name = 'Lower A'; aw.exercises.forEach(x => { const m = P.lower[1].find(e => e.name === x.name); if (m && !x.note) x.note = m.note; }); }
+    S.migr.program1 = true; save();
+    toast('Your 5-day program is loaded');
   }
   if (!S.onboarded) openOnboarding();
   if (S.appVersion && S.appVersion < APP_VERSION) toast('The System updated. New features are live.');

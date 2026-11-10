@@ -1,5 +1,5 @@
 // Service worker: offline app shell + best-effort evening reminder.
-const VERSION = 'system-v11';
+const VERSION = 'system-v12';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/core.js', 'js/state.js', 'js/engine.js', 'js/db.js', 'js/util.js', 'js/ui.js', 'js/ai.js', 'js/barcode.js', 'js/camera.js', 'js/backup.js',

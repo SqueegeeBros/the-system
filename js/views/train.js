@@ -24,7 +24,7 @@ export function startWorkout(tplKey) {
   if (!tpl) return chooseTemplate();
   S.activeWorkout = {
     id: uid(), date: dkey(), tpl: tplKey, name: tpl.name, startedAt: Date.now(), restUntil: 0, restFor: 0,
-    exercises: tpl.exercises.map(x => ({ id: uid(), name: x.name, target: `${x.sets} × ${x.reps}`, rest: +x.rest || 120,
+    exercises: tpl.exercises.map(x => ({ id: uid(), name: x.name, note: x.note || '', target: `${x.sets} × ${x.reps}`, rest: +x.rest || 120,
       sets: [...Array(Math.max(1, +x.sets || 1))].map(() => ({ w: '', r: '', done: false })), pr: false })),
   };
   save();
@@ -196,6 +196,7 @@ function allExerciseNames() {
 // ---------- Template editor ----------
 const tplRow = (x = {}) => `<div class="tplrow">
   <input class="tp-name" placeholder="Exercise" value="${esc(x.name || '')}">
+  <input class="tp-note" placeholder="Note (optional)" value="${esc(x.note || '')}" style="margin-top:6px">
   <div class="grid3">
     <label class="field"><span>Sets</span><input class="tp-sets" type="number" inputmode="numeric" value="${x.sets ?? 3}"></label>
     <label class="field"><span>Reps</span><input class="tp-reps" value="${esc(x.reps || '8–12')}"></label>
@@ -226,6 +227,7 @@ reg('train.edittpl', el => {
         t.exercises = [...rows.querySelectorAll('.tplrow')].map(r => ({
           id: uid(), name: r.querySelector('.tp-name').value.trim(), sets: Math.max(1, Math.round(num(r.querySelector('.tp-sets').value)) || 3),
           reps: r.querySelector('.tp-reps').value.trim() || '8–12', rest: Math.round(num(r.querySelector('.tp-rest').value)) || 120,
+          note: r.querySelector('.tp-note').value.trim(),
         })).filter(x => x.name);
         save(); closeSheet(); rerender(); toast('Template saved');
       };
@@ -274,6 +276,7 @@ function activeView() {
     return `<section class="panel ex open">
       <div class="qtop"><div><div class="qname">${esc(x.name)} ${x.pr ? '<span class="badge gold">PR</span>' : ''}</div>
         <div class="qdesc">Goal ${esc(x.target)} · rest ${x.rest}s</div>
+        ${x.note ? `<div class="exnote">${esc(x.note)}</div>` : ''}
         <div class="qdesc">${last ? `Last time: ${last.map(s => `${s.w}×${s.r}`).join(', ')}` : 'First time. Set your baseline.'}</div></div>
         <button class="iconbtn red" data-act="train.delex" data-ex="${i}" aria-label="Remove exercise">×</button></div>
       <div class="setchips">${x.sets.map((s, k) => s.done

@@ -6,7 +6,7 @@ export const regTick = (name, fn) => { TICK[name] = fn; };
 
 export const nav = {
   tab: 'quests',
-  sub: { food: 'today', train: 'main' },
+  sub: { food: 'today', train: 'main', health: null, newsCat: 'all' },
   foodDate: null,
   render: () => {},
 };

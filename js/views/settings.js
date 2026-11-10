@@ -6,6 +6,7 @@ import { reg, regChg, rerender, go } from '../core.js';
 import { notice, confirmBox, toast, busy } from '../ui.js';
 import * as AI from '../ai.js';
 import * as B from '../backup.js';
+import * as Sync from '../sync.js';
 
 const TPL_OPTS = () => [['', 'Rest'], ...Object.entries(S.templates).map(([k, t]) => [k, t.name])];
 
@@ -22,8 +23,54 @@ const dayChecks = (path, arr) => `<div class="daychecks">${[1, 2, 3, 4, 5, 6, 0]
 export function render() {
   const s = S.settings, T = s.targets;
   const last = S.backup.lastAt ? new Date(S.backup.lastAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
+  const hp = S.health.profile, ft = Math.floor(hp.heightIn / 12), inch = Math.round((hp.heightIn - ft * 12) * 10) / 10;
+  const sel = (path, cur, opts) => `<select data-chg="set.numsel" data-path="${path}">${opts.map(([v, n]) => `<option value="${v}" ${+cur === +v ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+  const st = Sync.status, cfgd = Sync.configured(), inn = Sync.signedIn();
+  const syncedAt = st.at ? new Date(st.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'not yet';
   return `<div class="wrap">
   <button class="linkbtn back" data-act="nav.go" data-tab="status">‹ Profile</button>
+
+  <section class="panel">
+    <div class="ptitle"><span>Easier to see</span></div>
+    <div class="sub">Text size</div>
+    <div class="seg textseg">${[['M', 'A'], ['L', 'A+'], ['XL', 'A++'], ['XXL', 'A+++']].map(([k, n], i) => `<button class="${S.ui.text === k ? 'on' : ''}" data-act="set.text" data-v="${k}" style="font-size:${0.85 + i * 0.18}rem" aria-label="Text size ${n}">${n}</button>`).join('')}</div>
+    <label class="check"><input type="checkbox" data-chg="set.hc" ${S.ui.hc ? 'checked' : ''}> High contrast (brighter text, stronger lines)</label>
+  </section>
+
+  <section class="panel">
+    <div class="ptitle"><span>Account & sync</span></div>
+    ${!cfgd ? `<div class="note" style="margin-top:0">Sign in on every device (phone, computer) and your data, DEXA scans, records and photos stay in sync. One-time setup: create a free Supabase project (steps in SETUP.md), then paste its two values here.</div>
+      <label class="field"><span>Supabase project URL</span><input id="sy-url" placeholder="https://xxxx.supabase.co" value="${esc(s.syncUrl)}"></label>
+      <label class="field"><span>Anon / publishable key</span><input id="sy-key" autocomplete="off" value="${esc(s.syncKey)}"></label>
+      <button class="btn full mt" data-act="sync.savecfg">Save</button>`
+    : inn ? `<div class="bigline"><div><b>Signed in</b><span> · ${esc(st.email)}</span></div></div>
+      <div class="note" style="margin-top:0">Status: <b>${esc({ idle: 'synced', syncing: 'syncing…', offline: 'offline, will sync when back online', error: 'problem: ' + st.err, out: 'signed out', off: 'off' }[st.state] || st.state)}</b> · last sync ${syncedAt}. Changes upload a few seconds after you make them, and other devices pick them up when you open the app.</div>
+      <div class="btnrow mt"><button class="btn" data-act="sync.now">Sync now</button><button class="btn ghost" data-act="sync.signout">Log out</button></div>`
+    : `<div class="note" style="margin-top:0">Log in to sync this device. Use the same email and password on your phone and computer.</div>
+      <label class="field"><span>Email</span><input id="sy-email" type="email" autocomplete="email" inputmode="email"></label>
+      <label class="field"><span>Password</span><input id="sy-pass" type="password" autocomplete="current-password"></label>
+      <div class="btnrow mt"><button class="btn" data-act="sync.signin">Log in</button><button class="btn ghost" data-act="sync.signup">Create account</button></div>
+      ${st.err ? `<div class="alert">${esc(st.err)}</div>` : ''}
+      <button class="linkbtn" data-act="sync.editcfg">Change Supabase project</button>`}
+  </section>
+
+  <section class="panel">
+    <div class="ptitle"><span>Body & plan</span></div>
+    <div class="grid2">
+      <label class="field"><span>Height (ft)</span><input type="number" inputmode="numeric" value="${ft}" data-chg="set.height" data-part="ft"></label>
+      <label class="field"><span>Height (in)</span><input type="number" inputmode="decimal" step="0.5" value="${inch}" data-chg="set.height" data-part="in"></label>
+      ${numField('Body fat %', 'health.profile.bf', hp.bf, 0.5)}${numField('Goal weight (lb)', 'health.profile.goalWeight', hp.goalWeight || '', 1)}
+    </div>
+    <label class="field"><span>Activity</span>${sel('health.profile.activity', hp.activity, [[1.35, 'Mostly sitting, light exercise'], [1.45, 'Desk job + 3 lifts/week'], [1.5, 'Lifting 3–4×/week + some walking'], [1.6, 'Lifting 4–5×/week + some walking'], [1.75, 'Lifting 5×/week + on your feet at work'], [1.9, 'Very physical job + lifting']])}</label>
+    <label class="field"><span>Gain speed</span>${sel('health.profile.goalRate', hp.goalRate, [[-0.5, 'Cut: −0.5 lb/week'], [0, 'Maintain'], [0.25, 'Lean bulk: +0.25 lb/week'], [0.5, 'Standard bulk: +0.5 lb/week'], [0.75, 'Fast bulk: +0.75 lb/week (hard gainer)']])}</label>
+    <div class="grid2">
+      <label class="field"><span>Protein (g per lb)</span>${sel('health.profile.proteinPerLb', hp.proteinPerLb, [[0.8, '0.8'], [0.9, '0.9'], [1, '1.0']])}</label>
+      <label class="field"><span>Fat (% of kcal)</span>${sel('health.profile.fatPct', hp.fatPct, [[20, '20%'], [25, '25%'], [30, '30%']])}</label>
+      <label class="field"><span>Wake up</span><input type="time" value="${hp.wake}" data-chg="set.str" data-path="health.profile.wake"></label>
+      <label class="field"><span>Usually train at</span><input type="time" value="${hp.trainAt}" data-chg="set.str" data-path="health.profile.trainAt"></label>
+    </div>
+    <div class="note">Used for your calorie target (Fuel → Plan), pill timing, and which meal slot food goes into (pre-workout vs post-workout).</div>
+  </section>
 
   <section class="panel">
     <div class="ptitle"><span>Daily targets</span></div>
@@ -94,11 +141,46 @@ export function render() {
     <div class="ptitle"><span>Danger zone</span></div>
     <button class="btn ghost danger full" data-act="set.reset">Reset everything</button>
   </section>
-  <div class="note center">The System · v1 · all data stays on this phone</div>
+  <div class="note center">The System · v13 · ${inn ? 'synced to your account' : 'data stays on this device until you sign in'}</div>
   </div>`;
 }
 
 regChg('set.num', el => { setPath(el.dataset.path, num(el.value)); save(); E.sync(); toast('Saved'); });
+regChg('set.numsel', el => { setPath(el.dataset.path, num(el.value)); save(); toast('Saved'); });
+regChg('set.height', el => {
+  const hp = S.health.profile, ft = Math.floor(hp.heightIn / 12), inch = hp.heightIn - ft * 12;
+  hp.heightIn = el.dataset.part === 'ft' ? num(el.value) * 12 + inch : ft * 12 + num(el.value);
+  save(); toast('Saved');
+});
+reg('set.text', el => { S.ui.text = el.dataset.v; save(); rerender(); });
+regChg('set.hc', el => { S.ui.hc = el.checked; save(); rerender(); });
+
+// ---------- Account & sync ----------
+reg('sync.savecfg', () => {
+  const url = $('#sy-url').value.trim(), key = $('#sy-key').value.trim();
+  if (!/^https:\/\/.+/.test(url) || key.length < 20) return toast('Paste both the project URL and the key.');
+  S.settings.syncUrl = url; S.settings.syncKey = key; Sync.resetClient(); save(); rerender(); toast('Saved. Now log in or create your account.');
+});
+reg('sync.editcfg', () => { S.settings.syncUrl = ''; S.settings.syncKey = ''; Sync.resetClient(); save(); rerender(); });
+const creds = () => ({ email: $('#sy-email').value.trim(), pass: $('#sy-pass').value });
+reg('sync.signin', async () => {
+  const { email, pass } = creds(); if (!email || !pass) return toast('Enter your email and password.');
+  try { toast('Logging in…'); await Sync.signIn(email, pass); toast('Signed in. Syncing.'); rerender(); }
+  catch (e) { notice({ title: 'Couldn’t log in', html: `<div class="msg sm">${esc(e.message)}</div>`, btn: 'OK' }); }
+});
+reg('sync.signup', async () => {
+  const { email, pass } = creds(); if (!email || pass.length < 8) return toast('Use your email and a password of 8+ characters.');
+  try {
+    const r = await Sync.signUp(email, pass);
+    if (r === 'confirm') notice({ title: 'Check your email', html: '<div class="msg sm">We sent you a confirmation link. Tap it, then come back here and log in.</div>', btn: 'OK' });
+    else { toast('Account created. Syncing.'); rerender(); }
+  } catch (e) { notice({ title: 'Couldn’t create account', html: `<div class="msg sm">${esc(e.message)}</div>`, btn: 'OK' }); }
+});
+reg('sync.signout', async () => {
+  if (!(await confirmBox('Log out', 'Stop syncing this device? Your data stays on this device and in your account.', 'Log out'))) return;
+  await Sync.signOut(); rerender();
+});
+reg('sync.now', async () => { toast('Syncing…'); await Sync.syncNow(); rerender(); toast(Sync.status.state === 'error' ? 'Sync problem: ' + Sync.status.err : 'Synced'); });
 regChg('set.str', el => { setPath(el.dataset.path, el.value.trim()); save(); toast('Saved'); });
 regChg('set.split', el => { const d = +el.dataset.d; if (el.value) S.settings.split[d] = el.value; else delete S.settings.split[d]; save(); toast('Saved'); });
 regChg('set.day', el => {
@@ -147,6 +229,7 @@ export async function onImport(file) {
 }
 reg('set.reset', async () => {
   if (!(await confirmBox('Reset everything', 'This erases your level, logs, meals and history on this phone. Export a backup first if you might want it.', 'Continue', true))) return;
-  if (!(await confirmBox('Are you sure?', 'This cannot be undone.', 'Erase everything', true))) return;
+  if (!(await confirmBox('Are you sure?', `This cannot be undone.${Sync.signedIn() ? ' This device will be logged out first, so the copy in your account stays safe.' : ''}`, 'Erase everything', true))) return;
+  if (Sync.signedIn()) await Sync.signOut();
   replace(defaults()); await flush(); location.reload();
 });

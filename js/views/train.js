@@ -5,6 +5,20 @@ import { $, esc, uid, dkey, DOW, DOW3, fmt, num, r1, clock, niceDate, lineChart 
 import { reg, regChg, regTick, nav, rerender, go } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast } from '../ui.js';
 import { programCard } from './quests.js';
+import { TIPS } from '../data/health-data.js';
+
+// Double progression: when every set last time reached the top of the rep range, add weight.
+const repRange = target => { const m = String(target || '').match(/(\d+)\s*(?:–|-)\s*(\d+)/); return m ? [+m[1], +m[2]] : null; };
+function progression(ex) {
+  const last = lastSets(ex.name), rr = repRange(ex.target.split('×')[1]);
+  if (!last || !rr || !last.length) return null;
+  const topW = Math.max(...last.map(s => num(s.w)));
+  if (!topW) return null;
+  const atTop = last.filter(s => num(s.w) === topW);
+  const inc = /squat|press|deadlift|leg|rdl|romanian|hack/i.test(ex.name) && !/shoulder|chest|bench|incline/i.test(ex.name) ? 10 : 5;
+  if (atTop.every(s => num(s.r) >= rr[1])) return { add: inc, w: topW + inc, r: rr[0], msg: `You hit ${rr[1]}+ reps on every set last time. Go up to ${topW + inc} lb.` };
+  return { add: 0, w: topW, msg: `Same weight (${topW} lb). Beat last time's reps, aiming for ${rr[1]}.` };
+}
 
 const e1rm = (w, r) => (w > 0 && r > 0 ? w * (1 + r / 30) : 0);
 const norm = s => String(s || '').trim().toLowerCase();
@@ -86,6 +100,8 @@ function ensureDraft(ex) {
   const ref = last?.[j] || last?.[last.length - 1];
   ex.dw = prevDone ? num(prevDone.w) : ref ? num(ref.w) : 0;
   ex.dr = ref ? num(ref.r) : prevDone ? num(prevDone.r) : firstNum(ex.target.split('×')[1]);
+  const pg = !prevDone && progression(ex);
+  if (pg && pg.add) { ex.dw = pg.w; ex.dr = pg.r; }
 }
 function refreshDraft(ex) { delete ex.dw; delete ex.dr; ensureDraft(ex); }
 
@@ -277,7 +293,9 @@ function activeView() {
       <div class="qtop"><div><div class="qname">${esc(x.name)} ${x.pr ? '<span class="badge gold">PR</span>' : ''}</div>
         <div class="qdesc">Goal ${esc(x.target)} · rest ${x.rest}s</div>
         ${x.note ? `<div class="exnote">${esc(x.note)}</div>` : ''}
-        <div class="qdesc">${last ? `Last time: ${last.map(s => `${s.w}×${s.r}`).join(', ')}` : 'First time. Set your baseline.'}</div></div>
+        <div class="qdesc">${last ? `Last time: ${last.map(s => `${s.w}×${s.r}`).join(', ')}` : 'First time. Set your baseline.'}</div>
+        ${(() => { const pg = progression(x); return pg ? `<div class="donebox">${esc(pg.msg)}</div>` : ''; })()}
+        ${!last && !x.note && TIPS[norm(x.name)] ? `<div class="note">💡 ${esc(TIPS[norm(x.name)])}</div>` : ''}</div>
         <button class="iconbtn red" data-act="train.delex" data-ex="${i}" aria-label="Remove exercise">×</button></div>
       <div class="setchips">${x.sets.map((s, k) => s.done
         ? `<button class="setchip done" data-act="train.unlog" data-ex="${i}" data-s="${k}">${CHECK}${num(s.w)}×${num(s.r)}</button>`
@@ -321,7 +339,7 @@ export function render() {
       return `<div class="row${d === wd ? ' cur' : ''}"><span class="dow">${DOW3[d]}</span>
         <span class="grow rt sm">${t ? esc(t.name) : '<span class="muted">Rest</span>'}</span>
         ${t ? `<span class="rs">${t.exercises.length ? `${t.exercises.length} ex` : 'empty'}</span><button class="iconbtn" data-act="train.edittpl" data-tpl="${tk}" aria-label="Edit">✎</button>` : ''}</div>`; }).join('')}
-    <div class="note">Change which day is which in Status → Settings.</div>
+    <div class="note">Change which day is which in Profile → Settings.</div>
   </section>
 
   <section class="panel">

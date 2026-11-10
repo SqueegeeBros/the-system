@@ -2,12 +2,9 @@
 import { S, day, save, logEvent } from '../state.js';
 import * as E from '../engine.js';
 import { $, esc, uid, dkey, addDays, parseKey, DOW3, fmt, num, r1, pct, niceDate, timeStr, lineChart } from '../util.js';
-import { reg, regChg, rerender, go } from '../core.js';
+import { reg, regChg, nav, rerender, go } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast } from '../ui.js';
-import { photoAdd, photoList, photoDel } from '../db.js';
-import { shrinkImage } from '../util.js';
 import { rankRing, medalsHTML } from './quests.js';
-import { takePhoto } from '../camera.js';
 
 const SIZES = { S: 'Small', M: 'Medium', L: 'Large', XL: 'Huge' };
 
@@ -76,24 +73,14 @@ export function render() {
   </section>
 
   <section class="panel">
-    <div class="ptitle"><span>Bodyweight</span></div>
-    <div class="grid3 stats3">
+    <div class="ptitle"><span>Body</span></div>
+    <div class="grid3 stats3" style="margin-top:0;border-top:0;padding-top:0">
       <div><div class="k">Latest</div><div class="v">${latest ? r1(latest.lb) : '—'}</div></div>
       <div><div class="k">7 days</div><div class="v sm">${delta(latest, w7)}</div></div>
       <div><div class="k">30 days</div><div class="v sm">${delta(latest, w30)}</div></div>
     </div>
-    <div class="inline mt"><input id="bw-in" type="number" inputmode="decimal" step="0.1" placeholder="Today’s weight (lb)"><button class="btn" data-act="status.weigh">Log</button></div>
-    <div class="note">Weigh in the morning after the bathroom, before you eat. Lean bulk pace for you is roughly +0.5 lb a week.</div>
-    ${lineChart(ws.slice(-45).map(w => ({ x: niceDate(w.date), y: w.lb })), { unit: '' })}
-    ${ws.length ? `<details><summary class="sub">Entries</summary>${[...ws].reverse().slice(0, 14).map(w => `<div class="row"><span class="grow">${niceDate(w.date)}</span><span>${r1(w.lb)} lb</span>
-      <button class="iconbtn red" data-act="status.delweigh" data-d="${w.date}">×</button></div>`).join('')}</details>` : ''}
-  </section>
-
-  <section class="panel">
-    <div class="ptitle"><span>Progress photos</span></div>
-    <div class="note">Stored only on this phone. They aren’t in backups, so save any you want to keep elsewhere too.</div>
-    <div class="photogrid" id="photogrid"><div class="empty">Loading…</div></div>
-    <button class="btn ghost full mt" data-act="status.addphoto">+ Add photo</button>
+    <div class="note">Weigh-ins, the trend chart, progress photos, DEXA scans and labs are in the Health tab.</div>
+    <button class="btn ghost full mt" data-act="status.tohealth" data-v="body">Open weight & body</button>
   </section>
 
   <section class="panel">
@@ -117,42 +104,13 @@ export function render() {
   </div>`;
 }
 
-export async function mount() {
-  const grid = $('#photogrid'); if (!grid) return;
-  const photos = (await photoList()).sort((a, b) => b.t - a.t);
-  if (!photos.length) { grid.innerHTML = '<div class="empty">No photos yet. Same spot, same lighting, every 2 weeks.</div>'; return; }
-  grid.innerHTML = photos.map(p => `<button class="ph" data-act="status.viewphoto" data-id="${p.id}"><img alt="" src="${URL.createObjectURL(p.blob)}"><span>${niceDate(p.date)}</span></button>`).join('');
-}
+reg('status.tohealth', el => { nav.tab = 'health'; nav.sub.health = el.dataset.v; history.replaceState(null, '', '#health'); history.pushState({ hsub: el.dataset.v }, '', '#health'); rerender(); window.scrollTo(0, 0); });
 
 reg('status.pause', async el => {
   const on = el.dataset.on === '1';
   if (on && !(await confirmBox('Pause today', `Use 1 of your ${S.settings.pausesPerMonth} monthly pauses? Today’s quests won’t count either way.`, 'Pause today'))) return;
   if (!E.setPaused(on)) return toast('No pauses left this month.');
   rerender();
-});
-reg('status.weigh', () => {
-  const v = num($('#bw-in').value); if (v < 80 || v > 500) return toast('Enter your weight in lb.');
-  const k = dkey(); S.weights = S.weights.filter(w => w.date !== k); S.weights.push({ date: k, lb: r1(v) });
-  save(); rerender(); toast(`Logged ${r1(v)} lb`);
-});
-reg('status.delweigh', el => { S.weights = S.weights.filter(w => w.date !== el.dataset.d); save(); rerender(); });
-
-reg('status.addphoto', () => takePhoto({ title: 'Progress photo', hint: 'Same spot and lighting every time.' }).then(b => b && onProgressPhoto(b)));
-export async function onProgressPhoto(file) {
-  if (!file) return;
-  const blob = await shrinkImage(file, 1600, 0.85);
-  await photoAdd({ id: uid(), t: Date.now(), date: dkey(), blob });
-  toast('Photo saved on this phone');
-  rerender();
-}
-reg('status.viewphoto', async el => {
-  const p = (await photoList()).find(x => x.id === el.dataset.id); if (!p) return;
-  sheet(niceDate(p.date), `<img class="fullph" alt="" src="${URL.createObjectURL(p.blob)}">
-    <button class="btn ghost danger full mt" data-act="status.delphoto" data-id="${p.id}">Delete photo</button>`, { wide: true });
-});
-reg('status.delphoto', async el => {
-  if (!(await confirmBox('Delete photo', 'Delete this progress photo permanently?', 'Delete', true))) return;
-  await photoDel(el.dataset.id); closeSheet(); rerender();
 });
 
 reg('status.msadd', () => {

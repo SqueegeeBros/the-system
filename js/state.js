@@ -5,13 +5,27 @@ import { dkey } from './util.js';
 export const S = {};            // the live state object (mutated in place)
 let mirrorFn = () => null;     // set by engine: small status record the service worker reads
 export const setMirror = fn => { mirrorFn = fn; };
+let flushHook = null;          // set by sync: called after a real change is saved
+export const setFlushHook = fn => { flushHook = fn; };
 
+// Health hub data. Body numbers are filled in from Settings → Body & plan.
+export function healthDefaults() {
+  return {
+    profile: { heightIn: 70, bf: 15, activity: 1.5, goalRate: 0.5, goalWeight: 0, proteinPerLb: 0.9, fatPct: 25, wake: '06:30', trainAt: '07:00' },
+    stackOn: {}, stackLog: {}, meds: [], checkins: {}, symptoms: [], dexa: [], measures: [], labs: [], records: [], photos: [],
+    emergency: { name: '', dob: '', blood: '', allergies: '', conditions: '', contact: '', notes: '' },
+    visitNotes: '', exMuscles: {}, news: null, recentFoods: [], customFoods: [],
+  };
+}
 
 export function defaults() {
   return {
     v: 1,
     createdAt: Date.now(),
+    _mtime: 0,             // last real change (used by cross-device sync)
+    syncUser: null,
     profile: { name: '', about: '', workLabel: '' },
+    ui: { text: 'L', hc: false },
     onboarded: false,
     settings: {
       targets: { kcal: 3300, p: 180, c: 440, f: 90, waterOz: 120 },
@@ -28,6 +42,8 @@ export function defaults() {
       geminiKey: '',
       geminiModel: 'gemini-flash-latest',
       driveClientId: '',
+      syncUrl: '',
+      syncKey: '',
       notify: false,
     },
     hunter: {
@@ -59,6 +75,8 @@ export function defaults() {
     xpLog: {},             // date -> net XP
     medals: {},            // medal id -> date earned
     prCount: 0,
+    health: healthDefaults(),
+    files: {},             // file id -> {name, type, size, t, up}
   };
 }
 
@@ -79,6 +97,11 @@ function merge(base, saved) {
   out.shopping = { ...base.shopping, ...(saved.shopping || {}) };
   out.backup = { ...base.backup, ...(saved.backup || {}) };
   out.focus = { ...base.focus, ...(saved.focus || {}) };
+  out.ui = { ...base.ui, ...(saved.ui || {}) };
+  out.health = { ...base.health, ...(saved.health || {}) };
+  out.health.profile = { ...base.health.profile, ...((saved.health || {}).profile || {}) };
+  out.health.emergency = { ...base.health.emergency, ...((saved.health || {}).emergency || {}) };
+  out.files = { ...(saved.files || {}) };
   return out;
 }
 
@@ -93,6 +116,7 @@ export async function load() {
       if (!S.profile.about) S.profile.about = "19, 6'4\", lean bulk for muscle. Lifts 5 days a week around 4–5 AM before technical school. Meal-preps on a budget (Aldi/Walmart). Runs Squeegee Bros, an exterior-cleaning business (windows, gutters, pressure washing), and struggles with distraction during work time. Never suggest peanut butter or peanuts.";
     }
   }
+  markClean();
   return S;
 }
 
@@ -108,13 +132,21 @@ export function day(k = dkey()) {
   return d;
 }
 
+// Change tracking: _mtime only moves when the data really changed (not when the app just opens).
+let lastJson = null;
+const snapshot = () => { const { _mtime, ...rest } = S; return JSON.stringify(rest); };
+export function markClean() { lastJson = snapshot(); }
+
 let timer = null;
 export function save() { clearTimeout(timer); timer = setTimeout(flush, 200); }
 export async function flush() {
   clearTimeout(timer);
+  const json = snapshot(), changed = json !== lastJson;
+  if (changed) { S._mtime = Date.now(); lastJson = json; }
   await kvSet('state', JSON.parse(JSON.stringify(S)));
   const m = mirrorFn();
   if (m) await kvSet('status', m);
+  if (changed) flushHook?.();
 }
 
 export function logEvent(text) {

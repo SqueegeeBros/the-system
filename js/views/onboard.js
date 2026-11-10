@@ -4,6 +4,7 @@ import * as E from '../engine.js';
 import { esc, num } from '../util.js';
 import { rerender } from '../core.js';
 import { sheet, closeSheet, toast, notice } from '../ui.js';
+import * as Sync from '../sync.js';
 
 const PLANS = {
   ulppl: { label: '5 days · Upper / Lower / Push / Pull / Legs', split: { 1: 'upper', 2: 'lower', 3: 'push', 4: 'pull', 5: 'legs' } },
@@ -15,7 +16,15 @@ const PLANS = {
 
 export function openOnboarding() {
   sheet('Welcome', `
-    <div class="note" style="margin-top:0">Set your standard. You can change all of this later in Profile → Settings.</div>
+    ${Sync.configured() ? `<div class="obacct">
+      <button class="btn ghost full" type="button" id="ob-haveacct">Already have an account? Log in</button>
+      <div id="ob-login" hidden>
+        <div class="note" style="margin-top:0">Log in with the email and password you used on your other device. Your data loads here.</div>
+        <label class="field"><span>Email</span><input id="ob-email" type="email" autocomplete="email" inputmode="email"></label>
+        <label class="field"><span>Password</span><input id="ob-pass" type="password" autocomplete="current-password"></label>
+        <button class="btn full mt" type="button" id="ob-signin">Log in</button>
+      </div></div>` : ''}
+    <div class="note" style="margin-top:0">New here? Set your standard. You can change all of this later in Profile → Settings.</div>
     <label class="field"><span>Your first name</span><input id="ob-name" autocomplete="given-name" placeholder="Name"></label>
     <div class="grid2">
       <label class="field"><span>Daily calories</span><input id="ob-kcal" type="number" inputmode="numeric" value="2500"></label>
@@ -32,6 +41,20 @@ export function openOnboarding() {
     <button class="btn full big mt" id="ob-go">Begin</button>`, {
     onMount: card => {
       card.closest('.sheet').querySelectorAll('[data-close]').forEach(b => (b.style.display = 'none')); // must finish setup
+      const have = card.querySelector('#ob-haveacct');
+      if (have) {
+        have.onclick = () => { have.hidden = true; card.querySelector('#ob-login').hidden = false; card.querySelector('#ob-email').focus(); };
+        card.querySelector('#ob-signin').onclick = async e => {
+          const email = card.querySelector('#ob-email').value.trim(), pass = card.querySelector('#ob-pass').value;
+          if (!email || !pass) return toast('Enter your email and password.');
+          e.target.disabled = true; e.target.textContent = 'Logging in…';
+          try {
+            await Sync.signIn(email, pass, { fresh: true });   // reloads with your account data
+            if (!S.onboarded) toast('Logged in. Your account has no data yet, so finish setup below.');
+          } catch (err) { notice({ title: 'Couldn’t log in', html: `<div class="msg sm">${esc(err.message)}</div>`, btn: 'OK' }); }
+          e.target.disabled = false; e.target.textContent = 'Log in';
+        };
+      }
       card.querySelector('#ob-go').onclick = () => {
         const name = card.querySelector('#ob-name').value.trim();
         if (!name) return toast('Enter your name.');
@@ -54,10 +77,10 @@ export function openOnboarding() {
           S.settings.checkinOpens = `${String(Math.floor(o / 60)).padStart(2, '0')}:${String(o % 60).padStart(2, '0')}`; }
         S.settings.bedNights = bedNights;
         S.settings.allergens = card.querySelector('#ob-all').value.split(',').map(x => x.trim()).filter(Boolean);
-        S.onboarded = true;
+        S.onboarded = true; S.seenHealthIntro = true;
         save(); closeSheet(); E.sync(); rerender();
         notice({ title: 'The System', html: `<div class="msg sm">Your daily quests reset at midnight. Miss one and you lose XP and your streak. Three missed days in a row costs a rank.<br><br>
-          Next: add your go-to meals in <b>Fuel → My Meals</b>, your exercises in <b>Train</b>, and a free Gemini key in <b>Profile → Settings</b> for photo scanning and the Coach.</div>`, btn: 'Begin' });
+          Next: add your go-to meals in <b>Fuel → My Meals</b>, your exercises in <b>Health → Training</b>, your height and body fat in <b>Profile → Settings → Body & plan</b>, and a free Gemini key there too for photo scanning and the Coach.<br><br>To use the same data on your phone and computer, create an account in <b>Profile → Settings → Account & sync</b>.</div>`, btn: 'Begin' });
       };
     },
   });

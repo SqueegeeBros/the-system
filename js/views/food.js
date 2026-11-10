@@ -2,17 +2,32 @@
 import { S, day, save } from '../state.js';
 import * as E from '../engine.js';
 import { $, esc, uid, dkey, addDays, fmt, num, r1, pct, niceDate, timeStr, shrinkImage, blobToBase64 } from '../util.js';
-import { reg, regChg, nav, rerender, go } from '../core.js';
+import { reg, regChg, nav, rerender, go, ACT } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast, busy } from '../ui.js';
 import * as AI from '../ai.js';
 import * as BC from '../barcode.js';
 import { takePhoto } from '../camera.js';
+import * as H from '../data/health-data.js';
+import * as Body from './body.js';
+
+// Which meal slot an entry belongs to (pre/post-workout are judged against your training time)
+export function guessMeal(d = new Date()) {
+  const [th, tm] = String(S.health?.profile?.trainAt || '07:00').split(':').map(Number);
+  const now = d.getHours() * 60 + d.getMinutes(), train = th * 60 + (tm || 0);
+  if (now >= train - 120 && now < train) return 'pre';
+  if (now >= train && now < train + 150) return 'post';
+  const h = d.getHours();
+  return h < 10 ? 'b' : h < 15 ? 'l' : h < 20 ? 'd' : 's';
+}
+const slotOf = e => e.meal || guessMeal(new Date(e.t));
+const slotName = k => (H.MEAL_SLOTS.find(m => m[0] === k) || [, 'Other'])[1];
 
 const TAGS = ['Breakfast', 'Pre-gym', 'Post-gym', 'Lunch', 'Dinner', 'Snack', 'Shake'];
 const ICON = {
   photo: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   barcode: '<svg viewBox="0 0 24 24"><path d="M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
 };
 
 // ---------- Peanut / allergen check ----------
@@ -40,7 +55,9 @@ export async function logEntry(entry, flag) {
   const amount = num(entry.amount) || (mode === 'gram' ? 100 : 1);
   const base = entry.base || { kcal: num(entry.kcal), p: num(entry.p), c: num(entry.c), f: num(entry.f) };
   const e = { id: uid(), t: Date.now(), name: entry.name, src: entry.src || 'manual', mode, amount, base,
-    container: entry.container || null, servingG: entry.servingG || null };
+    container: entry.container || null, servingG: entry.servingG || null,
+    meal: (nav.foodMeal && Date.now() - nav.foodMeal.t < 600000 ? nav.foodMeal.m : null) || entry.meal || guessMeal() };
+  nav.foodMeal = null;
   applyAmount(e);
   day().food.push(e);
   save(); E.sync(); rerender();
@@ -80,7 +97,9 @@ export function amountSheet(id) {
     ${!e.container ? `<label class="field"><span>${gram ? 'Grams' : 'Servings'} in a whole container (optional, remembered)</span>
       <input id="amt-cont" type="number" inputmode="decimal" placeholder="e.g. ${gram ? '907' : '4'}"></label>` : ''}
     <div class="amtprev" id="amt-prev"></div>
-    <button class="btn full mt" id="amt-save">Save</button>`, {
+    <button class="btn full mt" id="amt-save">Save</button>
+    <div class="sub mt">Meal</div>
+    <div class="chipgrid">${H.MEAL_SLOTS.map(([k, n]) => `<button class="pill${slotOf(e) === k ? ' on' : ''}" data-act="food.setmeal" data-id="${e.id}" data-m="${k}">${n}</button>`).join('')}</div>`, {
     onMount: card => {
       const inp = card.querySelector('#amt-in'), prev = card.querySelector('#amt-prev');
       const show = () => { const t = { ...e, amount: num(inp.value) }; applyAmount(t);
@@ -108,7 +127,7 @@ export async function logMeal(id, servings = 1) {
   const m = S.meals.find(x => x.id === id);
   if (!m) return;
   const s = num(servings) || 1;
-  const ok = await logEntry({ name: m.name, base: { kcal: m.kcal, p: m.p, c: m.c, f: m.f }, amount: s, mode: 'serving', container: m.container || null, src: 'meal' }, mealHasAllergen(m));
+  const ok = await logEntry({ name: m.name, base: { kcal: m.kcal, p: m.p, c: m.c, f: m.f }, amount: s, mode: 'serving', container: m.container || null, src: 'meal', meal: H.TAG_TO_SLOT[m.tag] }, mealHasAllergen(m));
   if (ok) { const e = day().food[day().food.length - 1]; e.mealId = m.id; save(); }
   return ok;
 }
@@ -124,7 +143,7 @@ export function macroBars(k = dkey()) {
 export function quickLogHTML() {
   const pinned = S.meals.filter(m => m.pinned);
   return `${macroBars()}
-    <div class="chips">${pinned.length ? pinned.map(mealChip).join('') : `<div class="empty">Pin meals in Food → My Meals to log them in one tap.</div>`}</div>
+    <div class="chips">${pinned.length ? pinned.map(mealChip).join('') : `<div class="empty">Pin meals in Fuel → My Meals to log them in one tap.</div>`}</div>
     ${toolsRow()}`;
 }
 const mealChip = m => `<button class="chip" data-act="food.quick" data-id="${m.id}">
@@ -132,6 +151,7 @@ const mealChip = m => `<button class="chip" data-act="food.quick" data-id="${m.i
   <div class="m">${esc(m.tag)} · ${fmt(m.kcal)} kcal · ${r1(m.p)}P / ${r1(m.c)}C / ${r1(m.f)}F${m.estimate ? ' · <i>est.</i>' : ''}</div></div>
   <div class="add">+</div></button>`;
 const toolsRow = () => `<div class="tools">
+  <button class="btn ghost" data-act="food.search">${ICON.search}Search</button>
   <button class="btn ghost" data-act="food.photo">${ICON.photo}Photo</button>
   <button class="btn ghost" data-act="food.barcode">${ICON.barcode}Barcode</button>
   <button class="btn ghost" data-act="food.manual">${ICON.plus}Manual</button></div>`;
@@ -146,6 +166,7 @@ export function quickTilesHTML() {
       <span class="tplus">+</span>
       <span class="tname">${esc(m.name)}</span>
       <span class="tmeta">${fmt(m.kcal)} kcal · ${r1(m.p)}g P${mealHasAllergen(m) ? ' · <b class="red">PB</b>' : ''}</span></button>`).join('')}
+    <button class="tile tool" data-act="food.search">${ICON.search}<span class="tname">Search foods</span></button>
     <button class="tile tool" data-act="food.photo">${ICON.photo}<span class="tname">Scan plate</span></button>
     <button class="tile tool" data-act="food.barcode">${ICON.barcode}<span class="tname">Barcode</span></button>
     <button class="tile tool" data-act="food.manual">${ICON.plus}<span class="tname">Manual</span></button>
@@ -158,9 +179,9 @@ reg('food.quicksheet', () => sheet('Log food', `${macroBars()}${quickTilesHTML()
 export function render() {
   const sub = nav.sub.food;
   const seg = `<div class="seg">
-    ${[['today', 'Log'], ['meals', 'My Meals'], ['shop', 'Shopping']].map(([k, l]) =>
+    ${[['today', 'Log'], ['meals', 'Meals'], ['plan', 'Plan'], ['shop', 'Shop']].map(([k, l]) =>
       `<button class="${sub === k ? 'on' : ''}" data-act="food.sub" data-k="${k}">${l}</button>`).join('')}</div>`;
-  return `<div class="wrap">${seg}${sub === 'meals' ? mealsView() : sub === 'shop' ? shopView() : todayView()}</div>`;
+  return `<div class="wrap">${seg}${sub === 'meals' ? mealsView() : sub === 'shop' ? shopView() : sub === 'plan' ? planView() : todayView()}</div>`;
 }
 reg('food.sub', el => { nav.sub.food = el.dataset.k; rerender(); window.scrollTo(0, 0); });
 
@@ -190,11 +211,18 @@ function todayView() {
 
   <section class="panel">
     <div class="ptitle"><span>Logged</span></div>
-    ${entries.length ? entries.map(e => `<div class="row">
-      <button class="grow entrybtn" ${editable ? `data-act="food.amount" data-id="${e.id}"` : 'disabled'}><div class="rt">${esc(e.name)} <span class="amt">${esc(amountLabel(e))}</span></div>
-        <div class="rs">${timeStr(e.t)} · ${fmt(e.kcal)} kcal · ${r1(e.p)}P / ${r1(e.c)}C / ${r1(e.f)}F${editable ? ' · <u>change amount</u>' : ''}</div></button>
-      ${editable ? `<button class="iconbtn red" data-act="food.del" data-id="${e.id}" aria-label="Remove">×</button>` : ''}</div>`).join('')
-      : `<div class="empty">${editable ? 'Nothing logged yet today.' : 'Nothing was logged this day.'}</div>`}
+    ${H.MEAL_SLOTS.map(([slot, label]) => {
+      const es = entries.filter(e => slotOf(e) === slot);
+      if (!es.length && !editable) return '';
+      const kc = es.reduce((a, e) => a + e.kcal, 0), pr = es.reduce((a, e) => a + e.p, 0);
+      return `<div class="mealhead"><div class="grow"><b>${label}</b><small>${es.length ? `${fmt(kc)} kcal · ${r1(pr)} g protein` : 'nothing yet'}</small></div>
+        ${editable ? `<button class="iconbtn" data-act="food.addto" data-m="${slot}" aria-label="Add food to ${label}">+</button>` : ''}</div>
+        ${es.map(e => `<div class="row">
+          <button class="grow entrybtn" ${editable ? `data-act="food.amount" data-id="${e.id}"` : 'disabled'}><div class="rt">${esc(e.name)} <span class="amt">${esc(amountLabel(e))}</span></div>
+            <div class="rs">${timeStr(e.t)} · ${fmt(e.kcal)} kcal · ${r1(e.p)}P / ${r1(e.c)}C / ${r1(e.f)}F${editable ? ' · <u>change</u>' : ''}</div></button>
+          ${editable ? `<button class="iconbtn red" data-act="food.del" data-id="${e.id}" aria-label="Remove">×</button>` : ''}</div>`).join('')}`;
+    }).join('')}
+    ${!entries.length && !editable ? `<div class="empty">Nothing was logged this day.</div>` : ''}
     ${!editable ? `<div class="note">Past days are read-only. Penalties for them are already settled.</div>` : ''}
   </section>
 
@@ -264,7 +292,7 @@ reg('food.photo', () => {
   takePhoto({ title: 'Scan plate', hint: 'Fit the whole plate in the frame, from above.' }).then(b => b && onPhoto(b));
 });
 function needKey() {
-  notice({ title: 'Gemini key needed', html: `<div class="msg sm">Photo scan and the AI meal builder use Google’s free Gemini tier. Add your key in <b>Status → Settings</b>. It takes about two minutes, and SETUP.md has the steps.</div>`,
+  notice({ title: 'Gemini key needed', html: `<div class="msg sm">Photo scan and the AI meal builder use Google’s free Gemini tier. Add your key in <b>Profile → Settings</b>. It takes about two minutes, and SETUP.md has the steps.</div>`,
     btn: 'Open settings', cancel: 'Later', onOk: () => go('settings') });
 }
 
@@ -567,3 +595,133 @@ regChg('food.extracheck', el => { const x = S.shopping.extras.find(e => e.id ===
 reg('food.extraadd', () => { const v = $('#shop-extra').value.trim(); if (!v) return; S.shopping.extras.push({ id: uid(), item: v, checked: false }); save(); rerender(); });
 reg('food.extradel', el => { S.shopping.extras = S.shopping.extras.filter(x => x.id !== el.dataset.id); save(); rerender(); });
 reg('food.shopreset', () => { S.shopping.checked = {}; S.shopping.extras.forEach(x => (x.checked = false)); save(); rerender(); toast('List reset for the new week'); });
+
+// ---------- Meal slots ----------
+reg('food.addto', el => { nav.foodMeal = { m: el.dataset.m, t: Date.now() }; ACT['food.quicksheet'](); });
+reg('food.setmeal', el => { const e = day().food.find(x => x.id === el.dataset.id); if (e) { e.meal = el.dataset.m; save(); } closeSheet(); rerender(); toast(`Moved to ${slotName(el.dataset.m)}`); });
+
+// ---------- Food search (built-in list, your foods, Open Food Facts) ----------
+let FQ = { q: '', online: null, loading: false, list: [] }, picked = null;
+const lc = s => String(s || '').toLowerCase();
+function foodList() {
+  const q = lc(FQ.q).trim(), toks = q.split(/\s+/).filter(Boolean);
+  const recent = S.health.recentFoods || [], pool = [...(S.health.customFoods || []), ...H.FOODS];
+  let list = q ? pool.filter(f => toks.every(t => lc(f.n).includes(t))) : [...recent, ...H.FOODS.filter(f => !recent.some(r => r.n === f.n))];
+  if (FQ.online) list = [...list, ...FQ.online];
+  FQ.list = list.slice(0, 60);
+  return `${!q && recent.length ? '<div class="sub">Recent first</div>' : ''}
+    ${FQ.list.map((f, i) => `<button class="row btnrowitem" data-act="food.pick" data-i="${i}"><div class="grow"><div class="rt sm">${esc(f.n)}${(f.peanut && peanutOn()) || allergenHit(f.n) ? ' <span class="badge red">Allergen</span>' : ''}</div><div class="rs">${esc(f.sv)} · ${r1(f.p)}P / ${r1(f.c)}C / ${r1(f.f)}F</div></div><b>${fmt(f.kcal)}</b></button>`).join('') || '<div class="empty">No matches in the built-in list.</div>'}
+    ${q.length >= 3 ? `<button class="btn ghost full mt" data-act="food.searchonline">${FQ.loading ? 'Searching…' : `Search online for “${esc(FQ.q)}”`}</button>` : ''}
+    <button class="btn ghost full mt" data-act="food.newfood">+ Create a food</button>`;
+}
+reg('food.search', () => {
+  FQ = { q: '', online: null, loading: false, list: [] };
+  sheet('Search foods', `<input id="fs-q" type="search" placeholder="e.g. rice, chicken, bagel" autocomplete="off" aria-label="Search foods"><div id="fs-list" class="mt">${foodList()}</div>`, {
+    onMount: card => { const i = card.querySelector('#fs-q'); i.oninput = () => { FQ.q = i.value; FQ.online = null; card.querySelector('#fs-list').innerHTML = foodList(); }; },
+  });
+});
+reg('food.searchonline', async () => {
+  if (FQ.loading) return; FQ.loading = true; const box = $('#fs-list'); if (box) box.innerHTML = foodList();
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(FQ.q)}&search_simple=1&json=1&page_size=20&fields=product_name,brands,nutriments,serving_quantity,allergens_tags,traces_tags`);
+    const j = await r.json();
+    FQ.online = (j.products || []).map(p => {
+      const n = p.nutriments || {}; let k100 = n['energy-kcal_100g']; if (k100 == null && n.energy_100g != null) k100 = n.energy_100g / 4.184;
+      if (k100 == null || !p.product_name) return null;
+      const g = parseFloat(p.serving_quantity) || 100, k = g / 100;
+      return { n: p.product_name + (p.brands ? ` (${p.brands.split(',')[0]})` : ''), sv: `${Math.round(g)} g`, g, kcal: Math.round(k100 * k), p: r1((n.proteins_100g || 0) * k), c: r1((n.carbohydrates_100g || 0) * k), f: r1((n.fat_100g || 0) * k),
+        peanut: [...(p.allergens_tags || []), ...(p.traces_tags || [])].some(t => /peanut/.test(t)) };
+    }).filter(Boolean);
+    if (!FQ.online.length) toast('Nothing found online.');
+  } catch { toast('Online search is busy. Try again, or use Barcode.'); }
+  FQ.loading = false; const b2 = $('#fs-list'); if (b2) b2.innerHTML = foodList();
+});
+function qtySheet(f) {
+  picked = f;
+  sheet(f.n, `<div class="rs">1 serving = ${esc(f.sv)} · ${fmt(f.kcal)} kcal · ${r1(f.p)}P / ${r1(f.c)}C / ${r1(f.f)}F</div>
+    ${f.id === 'massshake' ? `<div class="note">${esc(H.MASS_SHAKE_NOTE)}</div>` : ''}
+    <div class="amtchips">${[[0.5, '½'], [1, '1'], [1.5, '1½'], [2, '2'], [3, '3']].map(([q, l]) => `<button class="amtchip${q === 1 ? ' on' : ''}" data-act="food.qty" data-q="${q}">${l}</button>`).join('')}</div>
+    <label class="field"><span>Servings</span><input id="fq-n" type="number" inputmode="decimal" step="0.25" value="1"></label>
+    ${f.g ? `<label class="field"><span>Or grams</span><input id="fq-g" type="number" inputmode="decimal" placeholder="${f.g}"></label>` : ''}
+    <button class="btn full big mt" data-act="food.picklog">Log it</button>`, {
+    onMount: card => { const g = card.querySelector('#fq-g'); if (g) g.oninput = () => { const v = num(g.value); if (v) card.querySelector('#fq-n').value = r1(v / f.g * 100) / 100; }; },
+  });
+}
+reg('food.pick', el => qtySheet(FQ.list[+el.dataset.i]));
+reg('food.qty', el => { $('#fq-n').value = el.dataset.q; document.querySelectorAll('.amtchip').forEach(x => x.classList.toggle('on', x === el)); });
+reg('food.picklog', async () => {
+  const f = picked, q = num($('#fq-n').value); if (!q) return toast('Enter servings.');
+  S.health.recentFoods = [{ ...f }, ...(S.health.recentFoods || []).filter(x => x.n !== f.n)].slice(0, 25);
+  closeSheet();
+  await logEntry({ name: f.n, base: { kcal: f.kcal, p: f.p, c: f.c, f: f.f }, amount: q, mode: 'serving', src: 'db' }, f.peanut ? 'peanut' : allergenHit(f.n));
+});
+reg('food.newfood', () => sheet('Create a food', `<label class="field"><span>Name</span><input id="nf-n"></label><label class="field"><span>Serving size</span><input id="nf-sv" placeholder="e.g. 1 cup"></label>
+  <div class="grid4"><label class="field"><span>Kcal</span><input id="nf-k" type="number" inputmode="decimal"></label><label class="field"><span>Protein</span><input id="nf-p" type="number" inputmode="decimal"></label>
+  <label class="field"><span>Carbs</span><input id="nf-c" type="number" inputmode="decimal"></label><label class="field"><span>Fat</span><input id="nf-f" type="number" inputmode="decimal"></label></div>
+  <button class="btn full mt" data-act="food.newfoodgo">Save food</button>`));
+reg('food.newfoodgo', () => {
+  const n = $('#nf-n').value.trim(), k = num($('#nf-k').value); if (!n || !k) return toast('Name and calories are required.');
+  const f = { id: 'c_' + uid(), n, sv: $('#nf-sv').value.trim() || '1 serving', kcal: k, p: num($('#nf-p').value), c: num($('#nf-c').value), f: num($('#nf-f').value) };
+  S.health.customFoods = [f, ...(S.health.customFoods || [])]; save(); qtySheet(f);
+});
+
+// ---------- Plan: self-adjusting calorie target, sample day, tips ----------
+const dayGap = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 864e5);
+export function tdeeCalc() {
+  const p = S.health.profile, W = Body.curWeight(), lbmKg = W * (1 - p.bf / 100) * 0.45359237;
+  const bmr = 370 + 21.6 * lbmKg, formula = bmr * p.activity;     // Katch-McArdle × activity
+  const end = addDays(dkey(), -1), start = addDays(end, -20);
+  let sum = 0, n = 0; for (let k = start; k <= end; k = addDays(k, 1)) { const t = E.totals(k).kcal; if (t >= 1000) { sum += t; n++; } }
+  const tr = Body.trendSeries().filter(x => x.k >= start && x.k <= end), wi = S.weights.filter(w => w.date >= start && w.date <= end).length;
+  let obs = null;
+  if (n >= 7 && wi >= 5 && tr.length >= 10) { const a = tr[0], b = tr[tr.length - 1]; obs = sum / n - (b.t - a.t) * 3500 / Math.max(1, dayGap(a.k, b.k)); }
+  const conf = obs == null ? 0 : Math.min(1, n / 21) * Math.min(1, wi / 12);
+  return { bmr, formula, obs, conf, est: obs == null ? formula : conf * obs + (1 - conf) * formula, n, wi };
+}
+export function recTargets(tdee) {
+  const p = S.health.profile, r5 = x => Math.round(x / 5) * 5;
+  const kcal = Math.round((tdee + p.goalRate * 500) / 25) * 25, pr = r5(Body.curWeight() * p.proteinPerLb), f = r5(kcal * p.fatPct / 100 / 9);
+  return { kcal, p: pr, c: r5((kcal - pr * 4 - f * 9) / 4), f };
+}
+const goalText = r => r > 0 ? `gain <b>+${r} lb/week</b>` : r < 0 ? `lose <b>${-r} lb/week</b>` : '<b>maintain</b> your weight';
+function planView() {
+  const T = S.settings.targets, Ex = tdeeCalc(), R = recTargets(Ex.est), diff = R.kcal - T.kcal, p = S.health.profile, bulking = p.goalRate > 0;
+  const F = id => H.FOODS.find(f => f.id === id);
+  let all = 0, allP = 0;
+  const meals = H.SAMPLE_DAY.map((m, i) => {
+    const kc = m.items.reduce((a, [id, q]) => a + F(id).kcal * q, 0), pr = m.items.reduce((a, [id, q]) => a + F(id).p * q, 0); all += kc; allP += pr;
+    return `<div class="row"><div class="grow"><div class="rt sm">${slotName(m.meal)}</div><div class="rs">${m.items.map(([id, q]) => `${q !== 1 ? q + '× ' : ''}${esc(F(id).n)}`).join(', ')}</div><div class="rs">${fmt(kc)} kcal · ${r1(pr)} g protein</div></div><button class="btn ghost sm" data-act="food.logsample" data-i="${i}">Log</button></div>`;
+  });
+  return `<section class="panel"><div class="ptitle"><span>Calorie target</span></div>
+    <div class="bigline"><div><b>${fmt(T.kcal)}</b><span> kcal now</span></div><div><b>${fmt(Ex.est)}</b><span> burned / day (est.)</span></div></div>
+    <div class="note" style="margin-top:0">${Ex.obs == null ? `This is a formula estimate from your lean mass (${r1(Body.curWeight() * (1 - p.bf / 100))} lb) and activity. After <b>7+ days of food logs and 5+ weigh-ins</b>, it learns your real burn from your weight trend. So far: ${Ex.n} days logged, ${Ex.wi} weigh-ins.` : `Learned from ${Ex.n} logged days and ${Ex.wi} weigh-ins (${Math.round(Ex.conf * 100)}% confidence). Your real data says you burn about ${fmt(Ex.obs)} kcal/day.`}</div>
+    ${Math.abs(diff) >= 50 || R.p !== T.p ? `<div class="donebox">To ${goalText(p.goalRate)}: <b>${fmt(R.kcal)} kcal</b> (${diff >= 0 ? '+' : ''}${fmt(diff)}) · ${R.p} g protein · ${R.c} g carbs · ${R.f} g fat</div>
+      <button class="btn full mt" data-act="food.applytargets">Use these targets</button><div class="note">This also changes what your daily nutrition quest asks for.</div>` : `<div class="donebox">Your targets match your goal to ${goalText(p.goalRate)}.</div>`}
+    <div class="note">Goal, body fat %, activity and protein are in Profile → Settings → Body & plan.</div></section>
+  ${bulking ? `<section class="panel"><div class="ptitle"><span>Sample bulking day</span></div><div class="note" style="margin-top:0">Peanut-free. About <b>${fmt(all)} kcal</b> and ${r1(allP)} g protein. Tap Log to add a meal to that slot today.</div>${meals.join('')}</section>
+  <section class="panel"><div class="ptitle"><span>Mass shake</span></div><div class="rt sm">1,148 kcal · 83 g protein · peanut-free</div><div class="note">${esc(H.MASS_SHAKE_NOTE)}</div>
+    <button class="btn ghost full mt" data-act="food.saveshake">Save to My Meals</button></section>
+  <section class="panel"><div class="ptitle"><span>Hard-gainer tips</span></div>
+    <p class="para">• <b>Drink calories.</b> Whole milk and the mass shake are the easiest wins when you're not hungry.</p>
+    <p class="para">• <b>Eat every 3–4 hours.</b> 4–6 meals, each with about ${Math.round(Body.curWeight() * 0.45359237 * 0.4 / 5) * 5} g protein (0.4 g/kg).</p>
+    <p class="para">• <b>Add fat to meals.</b> One tablespoon of olive oil is 120 kcal you won't notice.</p>
+    <p class="para">• <b>Load carbs around training.</b> Rice, bagels, oats and fruit power more sets.</p>
+    <p class="para">• <b>Cut back on bulky veggies</b> if they fill you up too much. Keep some for your health.</p>
+    <p class="para">• <b>Trust the trend, not the mirror.</b> Aim for +${p.goalRate} lb/week on the trend line in Health → Weight & body.</p></section>` : ''}`;
+}
+reg('food.applytargets', async () => {
+  const R = recTargets(tdeeCalc().est), T = S.settings.targets;
+  if (!(await confirmBox('Update targets', `Set your daily targets to <b>${fmt(R.kcal)} kcal</b>, ${R.p} g protein, ${R.c} g carbs and ${R.f} g fat?`, 'Update'))) return;
+  Object.assign(T, R); save(); E.sync(); rerender(); toast('Targets updated');
+});
+reg('food.logsample', async el => {
+  const m = H.SAMPLE_DAY[+el.dataset.i], F = id => H.FOODS.find(f => f.id === id);
+  const t = m.items.reduce((a, [id, q]) => { const f = F(id); a.kcal += f.kcal * q; a.p += f.p * q; a.c += f.c * q; a.f += f.f * q; return a; }, { kcal: 0, p: 0, c: 0, f: 0 });
+  await logEntry({ name: `${slotName(m.meal)} (sample)`, base: t, amount: 1, src: 'plan', meal: m.meal }, null);
+});
+reg('food.saveshake', () => {
+  if (S.meals.some(m => m.name === 'Mass shake')) return toast('Already in My Meals.');
+  S.meals.push({ id: uid(), name: 'Mass shake', tag: 'Shake', kcal: 1148, p: 83, c: 118, f: 42, servings: 1, pinned: true, estimate: false, prep: { on: false, batches: 5 },
+    ingredients: [{ item: 'Whole milk', qty: 2, unit: 'cup' }, { item: 'Whey protein', qty: 2, unit: 'scoop' }, { item: 'Oats (dry)', qty: 1, unit: 'cup' }, { item: 'Banana', qty: 1, unit: '' }, { item: 'Sunflower seed butter', qty: 2, unit: 'tbsp' }] });
+  save(); toast('Saved and pinned to Quick Log');
+});

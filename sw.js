@@ -1,9 +1,11 @@
 // Service worker: offline app shell + best-effort evening reminder.
-const VERSION = 'system-v12';
+const VERSION = 'system-v13';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/core.js', 'js/state.js', 'js/engine.js', 'js/db.js', 'js/util.js', 'js/ui.js', 'js/ai.js', 'js/barcode.js', 'js/camera.js', 'js/backup.js',
+  'js/config.js', 'js/files.js', 'js/sync.js', 'js/data/health-data.js',
   'js/views/quests.js', 'js/views/food.js', 'js/views/train.js', 'js/views/work.js', 'js/views/status.js', 'js/views/settings.js', 'js/views/coach.js', 'js/views/onboard.js',
+  'js/views/health.js', 'js/views/body.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-180.png',
 ];
 
@@ -40,7 +42,7 @@ self.addEventListener('fetch', e => {
 // ---------- Evening reminder (Periodic Background Sync, installed app only) ----------
 function idbGet(key) {
   return new Promise(res => {
-    const r = indexedDB.open('the-system', 1);
+    const r = indexedDB.open('the-system');
     r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv'); if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' }); };
     r.onerror = () => res(null);
     r.onsuccess = () => {
@@ -53,7 +55,7 @@ function idbGet(key) {
 }
 function idbSet(key, val) {
   return new Promise(res => {
-    const r = indexedDB.open('the-system', 1);
+    const r = indexedDB.open('the-system');
     r.onerror = () => res();
     r.onsuccess = () => { try { const t = r.result.transaction('kv', 'readwrite'); t.objectStore('kv').put(val, key); t.oncomplete = () => res(); t.onerror = () => res(); } catch { res(); } };
   });

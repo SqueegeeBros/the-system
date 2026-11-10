@@ -125,7 +125,7 @@ export async function testKey() {
 
 // ---------- Coach chat ----------
 export async function coachChat(history, context) {
-  if (!hasKey()) throw new Error('Add your free Gemini API key in Status → Settings first.');
+  if (!hasKey()) throw new Error('Add your free Gemini API key in Profile → Settings first.');
   const name = S.profile.name || 'the user', about = S.profile.about?.trim();
   const system = `You are "the Coach" inside The System, a personal quest-tracker app (gamified, but keep your tone grounded, direct and practical — no roleplay, no hype, no flattery).
 You're talking with ${name}.${about ? ` About them, in their words: ${about}` : ''}

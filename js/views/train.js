@@ -2,7 +2,7 @@
 import { S, day, save, logEvent } from '../state.js';
 import * as E from '../engine.js';
 import { $, esc, uid, dkey, DOW, DOW3, fmt, num, r1, clock, niceDate, lineChart } from '../util.js';
-import { reg, regChg, regTick, nav, rerender, go } from '../core.js';
+import { reg, regChg, regTick, nav, rerender, go, ACT } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast } from '../ui.js';
 import { programCard } from './quests.js';
 import { TIPS } from '../data/health-data.js';
@@ -45,9 +45,32 @@ export function startWorkout(tplKey) {
   go('train');
 }
 function chooseTemplate() {
-  sheet('Start which session?', Object.entries(S.templates).map(([k, t]) =>
-    `<button class="row btnrowitem" data-act="train.pick" data-tpl="${k}"><span class="grow rt">${esc(t.name)}</span><span class="rs">${t.exercises.length} exercises</span></button>`).join(''));
+  const planned = E.templateFor(dkey());
+  const keys = Object.keys(S.templates).sort((a, b) => (b === planned) - (a === planned));
+  sheet('Which session?', keys.map(k => { const t = S.templates[k];
+    return `<button class="row btnrowitem" data-act="train.pick" data-tpl="${k}"><span class="grow rt">${esc(t.name)}${k === planned ? ' <span class="badge gold">Today</span>' : ''}</span>
+      <span class="rs">${t.exercises.length} ex · ${t.exercises.reduce((a, e) => a + (+e.sets || 0), 0)} sets</span></button>`; }).join('') +
+    `<button class="btn ghost full mt" data-act="train.newtpl">+ New session</button>`);
 }
+reg('train.choose', async () => {
+  const aw = S.activeWorkout;
+  if (aw) {
+    const logged = aw.exercises.some(x => x.sets.some(s => s.done));
+    if (logged && !(await confirmBox('Switch session', 'You’ve logged sets in this session. Switching throws them away. Finish it first if you want to keep them.', 'Switch anyway', true))) return;
+    S.activeWorkout = null; save();
+  }
+  chooseTemplate();
+});
+reg('train.newtpl', () => {
+  sheet('New session', `<label class="field"><span>Session name</span><input id="nt-name" placeholder="e.g. Arms, Upper B, Cardio"></label>
+    <button class="btn full mt" data-act="train.newtplgo">Create and add exercises</button>`);
+});
+reg('train.newtplgo', () => {
+  const name = $('#nt-name').value.trim(); if (!name) return toast('Name the session.');
+  const key = 'c' + uid();
+  S.templates[key] = { name, exercises: [] }; save();
+  ACT['train.edittpl']({ dataset: { tpl: key, startAfter: '1' } });
+});
 reg('train.pick', el => { closeSheet(); startWorkout(el.dataset.tpl); });
 reg('train.start', el => {
   const key = el.dataset.tpl || E.templateFor(dkey());
@@ -228,7 +251,8 @@ reg('train.edittpl', el => {
     <div id="tp-rows">${t.exercises.map(tplRow).join('')}</div>
     <button type="button" class="btn ghost sm mt" id="tp-add">+ Exercise</button>
     <div class="note">Compounds usually rest 120–180 s and isolations 60–120 s.</div>
-    <button class="btn full mt" id="tp-save">Save template</button>`, {
+    <button class="btn full mt" id="tp-save">${el.dataset.startAfter ? 'Save and start' : 'Save template'}</button>
+    ${key.startsWith('c') ? `<button class="btn danger full mt" id="tp-del">Delete this session</button>` : ''}`, {
     onMount: card => {
       const rows = card.querySelector('#tp-rows');
       card.querySelector('#tp-add').onclick = () => rows.insertAdjacentHTML('beforeend', tplRow());
@@ -238,6 +262,12 @@ reg('train.edittpl', el => {
         if (e.target.classList.contains('tp-up') && r.previousElementSibling) r.parentNode.insertBefore(r, r.previousElementSibling);
         if (e.target.classList.contains('tp-down') && r.nextElementSibling) r.parentNode.insertBefore(r.nextElementSibling, r);
       };
+      card.querySelector('#tp-del')?.addEventListener('click', async () => {
+        if (!(await confirmBox('Delete session', `Delete <b>${esc(t.name)}</b>? Past workouts stay in history.`, 'Delete', true))) return;
+        delete S.templates[key];
+        for (const d of Object.keys(S.settings.split)) if (S.settings.split[d] === key) delete S.settings.split[d];
+        save(); closeSheet(); rerender();
+      });
       card.querySelector('#tp-save').onclick = () => {
         t.name = card.querySelector('#tp-title').value.trim() || t.name;
         t.exercises = [...rows.querySelectorAll('.tplrow')].map(r => ({
@@ -246,6 +276,7 @@ reg('train.edittpl', el => {
           note: r.querySelector('.tp-note').value.trim(),
         })).filter(x => x.name);
         save(); closeSheet(); rerender(); toast('Template saved');
+        if (el.dataset.startAfter) startWorkout(key);
       };
     },
   });
@@ -275,7 +306,7 @@ function activeView() {
   return `<div class="wrap">
   <section class="panel sticky">
     <div class="sessionhead"><div><div class="qname">${esc(aw.name)}</div><div class="sub"><span data-tick="workout-elapsed"></span> · ${doneSets}/${total} sets</div></div>
-      <div class="btnrow tight"><button class="btn ghost sm" data-act="train.discard">Discard</button><button class="btn sm" data-act="train.finish">Finish</button></div></div>
+      <div class="btnrow tight"><button class="btn ghost sm" data-act="train.choose">Switch</button><button class="btn ghost sm" data-act="train.discard">Discard</button><button class="btn sm" data-act="train.finish">Finish</button></div></div>
     <div class="bar thick mt"><i style="width:${total ? (doneSets / total) * 100 : 0}%"></i></div>
     <div class="restbar" hidden><div class="restrow"><span data-tick="rest"></span><button class="linkbtn" data-act="train.skiprest">Skip rest</button></div><div class="bar"><i></i></div></div>
   </section>
@@ -339,6 +370,10 @@ export function render() {
       return `<div class="row${d === wd ? ' cur' : ''}"><span class="dow">${DOW3[d]}</span>
         <span class="grow rt sm">${t ? esc(t.name) : '<span class="muted">Rest</span>'}</span>
         ${t ? `<span class="rs">${t.exercises.length ? `${t.exercises.length} ex` : 'empty'}</span><button class="iconbtn" data-act="train.edittpl" data-tpl="${tk}" aria-label="Edit">✎</button>` : ''}</div>`; }).join('')}
+    ${Object.keys(S.templates).filter(k => !Object.values(S.settings.split).includes(k)).map(k => `<div class="row"><span class="dow">—</span>
+      <span class="grow rt sm">${esc(S.templates[k].name)}</span><span class="rs">${S.templates[k].exercises.length} ex</span>
+      <button class="iconbtn" data-act="train.edittpl" data-tpl="${k}" aria-label="Edit">✎</button></div>`).join('')}
+    <div class="btnrow mt"><button class="btn ghost sm" data-act="train.choose">Switch session</button><button class="btn ghost sm" data-act="train.newtpl">+ New session</button></div>
     <div class="note">Change which day is which in Profile → Settings.</div>
   </section>
 

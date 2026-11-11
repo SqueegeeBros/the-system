@@ -559,4 +559,4 @@ body.hicon input:not([type=checkbox]):not([type=file]),body.hicon select,body.hi
 }
 /* 2×2 grids so macros and nutrition inputs never overflow at large text sizes */
 .macros{grid-template-columns:repeat(2,1fr);gap:12px 14px}
-.grid4{grid-template-columns:repeat(2,1fr);gap:0 10px}
+.grid4{grid-template-columns:repeat(2,1fr);gap:0 10px}.swbtn{background:rgba(255,255,255,.07);border-radius:99px;padding:8px 12px;color:#fff;letter-spacing:.1em;cursor:pointer}

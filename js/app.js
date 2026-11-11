@@ -211,6 +211,10 @@ window.addEventListener('pagehide', () => flush());
     S.migr.health1 = true; save();
   }
   let introShown = false;
+  if (!S.migr.swapPP && S.profile.name === 'Nathan') {
+    if (S.settings.split[3] === 'pull' && S.settings.split[4] === 'push') { S.settings.split[3] = 'push'; S.settings.split[4] = 'pull'; toast('Wednesday is Push, Thursday is Pull'); }
+    S.migr.swapPP = true; save();
+  }
   if (!S.onboarded) openOnboarding();
   else if (!S.seenHealthIntro) {
     S.seenHealthIntro = true; introShown = true; save();

@@ -44,7 +44,7 @@ export function programCard(k = dkey()) {
     <div><div class="chips2"><span class="chip2">${esc(splitName)}</span><span class="chip2">Day ${order.indexOf(wd) + 1} of ${order.length}</span></div>
       <div class="h title">${esc(tpl.name)}</div>
       <div class="psub">${tpl.exercises.length ? `${tpl.exercises.length} exercises · ${sets} sets · ~${Math.round(sets * 3.2)} min${esc(lastLine(key))}` : 'No exercises saved yet. Add them as you go.'}</div></div>
-    <div class="foot"><div class="lbl">Week ${week}</div>
+    <div class="foot"><button class="lbl swbtn" data-act="train.choose">Week ${week} · Switch ⇄</button>
       ${done ? `<button class="cta" data-act="nav.go" data-tab="train" style="background:#141416;color:#fff;border:1px solid #2a2a2e">Done ✓ View</button>`
         : `<button class="cta" data-act="train.start" data-tpl="${key}">${aw ? 'Resume' : 'Start workout'} ${PLAY}</button>`}</div></section>`;
 }

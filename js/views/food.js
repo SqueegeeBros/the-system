@@ -423,12 +423,15 @@ function mealsView() {
     <div class="btnrow"><button class="btn ghost" data-act="food.newmeal">+ New meal</button><button class="btn" data-act="food.aimeal">Build with AI</button></div>
     <div class="note">Pinned meals show up in Quick Log for one-tap logging. Macros are per serving.</div>
   </section>
+  ${S.mealsArchive?.meals?.length ? `<section class="panel"><div class="note" style="margin-top:0">${S.mealsArchive.meals.length} older meal${S.mealsArchive.meals.length > 1 ? 's were' : ' was'} removed when your Sunday prep plan was set up. Past log entries are unchanged.</div>
+    <div class="btnrow mt"><button class="btn ghost sm" data-act="food.restoremeals">Restore them</button><button class="btn ghost sm" data-act="food.forgetmeals">Delete for good</button></div></section>` : ''}
   <section class="panel">
     <div class="ptitle"><span>My meals</span></div>
     ${S.meals.length ? S.meals.map(m => `<div class="mealrow">
       <div class="grow">
         <div class="rt">${esc(m.name)} ${m.estimate ? '<span class="badge">Estimate</span>' : ''} ${mealHasAllergen(m) ? '<span class="badge red">Peanut</span>' : ''}</div>
         <div class="rs">${esc(m.tag)} · ${fmt(m.kcal)} kcal · ${r1(m.p)}P / ${r1(m.c)}C / ${r1(m.f)}F${m.servings > 1 ? ` · batch makes ${m.servings}` : ''}</div>
+        ${m.note ? `<div class="rs" style="color:var(--dim)">${esc(m.note)}</div>` : ''}
       </div>
       <div class="mealacts">
         <button class="iconbtn ${m.pinned ? 'gold' : ''}" data-act="food.pin" data-id="${m.id}" aria-label="Pin">${m.pinned ? '★' : '☆'}</button>
@@ -438,6 +441,8 @@ function mealsView() {
       </div></div>`).join('') : '<div class="empty">No meals yet.</div>'}
   </section>`;
 }
+reg('food.restoremeals', () => { const a = S.mealsArchive?.meals || []; S.meals.push(...a.filter(m => !S.meals.some(x => x.id === m.id)).map(m => ({ ...m, prep: { ...(m.prep || {}), on: false } }))); S.mealsArchive = null; save(); rerender(); toast(`${a.length} meal${a.length > 1 ? 's' : ''} restored (not added to the shopping list)`); });
+reg('food.forgetmeals', async () => { if (!(await confirmBox('Delete for good', 'Permanently delete the removed meals? Past log entries stay.', 'Delete', true))) return; S.mealsArchive = null; save(); rerender(); });
 reg('food.pin', el => { const m = S.meals.find(x => x.id === el.dataset.id); m.pinned = !m.pinned; save(); rerender(); });
 reg('food.dupmeal', el => {
   const m = S.meals.find(x => x.id === el.dataset.id);
@@ -697,6 +702,7 @@ function planView() {
     <div class="note">Goal, body fat %, activity and protein are in Profile → Settings → Body & plan.</div></section>
   ${bulking ? `<section class="panel"><div class="ptitle"><span>Sample bulking day</span></div><div class="note" style="margin-top:0">Checked against your allergy list by food name only, so always check real ingredient labels. About <b>${fmt(all)} kcal</b> and ${r1(allP)} g protein. Tap Log to add a meal to that slot today.</div>${meals.join('')}</section>
   <section class="panel"><div class="ptitle"><span>Mass shake</span></div><div class="rt sm">1,148 kcal · 83 g protein · peanut-free</div><div class="note">${esc(H.MASS_SHAKE_NOTE)}</div>
+    <div class="note">Contains milk and whey, so it isn't part of your acne-conscious trial. Sunflower seed butter: check the label for tree-nut cross-contact.</div>
     <button class="btn ghost full mt" data-act="food.saveshake">Save to My Meals</button></section>
   <section class="panel"><div class="ptitle"><span>Hard-gainer tips</span></div>
     <p class="para">• <b>Drink calories.</b> Whole milk and the mass shake are the easiest wins when you're not hungry.</p>

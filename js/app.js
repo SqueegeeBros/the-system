@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -238,6 +238,35 @@ window.addEventListener('pagehide', () => { flush(); flushFace(); });
     S.settings.planRange = S.settings.planRange || { lo: 3200, hi: 3400 };
     S.migr.face1 = true; save();
     if (added || add.length) toast(`${added ? `${added} meal-plan templates added to My Meals (estimates)` : ''}${added && add.length ? ' · ' : ''}${add.length ? 'Tree-nut allergy words added' : ''}`);
+  }
+  // One-time (v15): revised Sunday-prep plan. Keeps only the five plan meals, set up for a 7-day shopping list.
+  // Removed meals are archived (not destroyed) and can be restored from Fuel → Meals.
+  if (!S.migr.meals2) {
+    const I = (item, qty, unit = '') => ({ item, qty, unit });
+    const M = (id, name, tag, kcal, p, c, f, servings, batches, ingredients, note) => ({ id, name, tag, kcal, p, c, f, servings, ingredients, pinned: true, estimate: true, planTemplate: true, note, prep: { on: true, batches } });
+    const PLAN = [
+      M('plan_plan_breakfast_eggs_oats_banana', 'Breakfast: eggs, oats, banana + sausage', 'Breakfast', 865, 45, 84, 39, 1, 7,
+        [I('Eggs, large', 4), I('Rolled oats (dry weight)', 80, 'g'), I('Banana', 1), I('Breakfast sausage (1 serving, check label)', 1), I('Cinnamon', 0)],
+        'Generic estimate per plate, with sausage. Without sausage it is about 700 kcal: replace it with 1 tbsp olive oil elsewhere or more oats/bread. Cook eggs fresh each day.'),
+      M('plan_plan_training_snack_banana_rice_cakes', 'Pre-workout: banana + 2 rice cakes', 'Pre-gym', 175, 3, 42, 1, 1, 7,
+        [I('Banana', 1), I('Plain rice cakes', 2)], 'Training fuel. If you notice a skin pattern, swap the rice cakes for 2 slices of whole-grain bread and log the change.'),
+      M('plan_plan_lunch_chicken_rice_beans_veg', 'Lunch: chicken, rice & bean bowl', 'Lunch', 1060, 59, 151, 24, 7, 1,
+        [I('Chicken breast, boneless skinless (raw weight)', 1050, 'g'), I('Brown or parboiled rice (dry weight)', 980, 'g'), I('Beans, canned (drained weight, ~5 cans)', 1050, 'g'), I('Frozen mixed vegetables', 1050, 'g'), I('Olive oil', 105, 'g'), I('Lemon, garlic, pepper / cumin, paprika', 0)],
+        'Batch of 7 bowls. Per bowl: 150 g raw chicken, 140 g dry rice, 150 g drained beans, 150 g veg, 15 g oil. Cook chicken to 165°F. Fridge 3 portions, freeze the rest.'),
+      M('plan_plan_dinner_pasta_lentils_tomatoes', 'Dinner: lentil-tomato whole-wheat pasta', 'Dinner', 1070, 50, 182, 21, 7, 1,
+        [I('Whole-wheat pasta (dry weight)', 980, 'g'), I('Dry lentils', 700, 'g'), I('Crushed tomatoes, no salt added (~4 cans)', 1400, 'g'), I('Frozen spinach or mixed vegetables', 700, 'g'), I('Olive oil', 105, 'g'), I('Garlic, oregano, pepper', 0)],
+        'Batch of 7 bowls. Per bowl: 140 g dry pasta, 100 g dry lentils, 200 g tomatoes, 100 g veg, 15 g oil. If lentils are too filling, start at 50 g dry and add pasta or oil instead.'),
+      M('plan_plan_add_on_whole_grain_bread_or_bagel', 'Add-on: whole-grain bread + olive oil', 'Snack', 325, 10, 36, 17, 1, 7,
+        [I('Whole-grain bread (slices)', 2), I('Olive oil', 14, 'g')],
+        'Between jobs on workdays. A bagel instead of bread is about 280 kcal before oil. Skip it on days you already hit your target.'),
+    ];
+    const keepEdited = S.meals.filter(m => m.planTemplate && m.estimate === false);   // you edited it: leave it alone
+    const removed = S.meals.filter(m => !m.planTemplate);
+    S.meals = [...PLAN.filter(p => !keepEdited.some(k => k.id === p.id)), ...keepEdited];
+    if (removed.length) S.mealsArchive = { at: Date.now(), meals: [...(S.mealsArchive?.meals || []), ...removed] };
+    S.shopping.checked = {};
+    S.migr.meals2 = true; save();
+    toast(`Meals updated to your Sunday prep plan${removed.length ? ` · ${removed.length} other meal${removed.length > 1 ? 's' : ''} removed (restore in Fuel → Meals)` : ''}`);
   }
   let introShown = false;
   if (!S.migr.swapPP && S.profile.name === 'Nathan') {

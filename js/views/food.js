@@ -9,6 +9,7 @@ import * as BC from '../barcode.js';
 import { takePhoto } from '../camera.js';
 import * as H from '../data/health-data.js';
 import * as Body from './body.js';
+import { waterPanel } from '../water.js';
 
 // Which meal slot an entry belongs to (pre/post-workout are judged against your training time)
 export function guessMeal(d = new Date()) {
@@ -226,16 +227,7 @@ function todayView() {
     ${!editable ? `<div class="note">Past days are read-only. Penalties for them are already settled.</div>` : ''}
   </section>
 
-  <section class="panel">
-    <div class="ptitle"><span>Water</span></div>
-    <div class="bigline"><div><b>${fmt(d.water || 0)}</b><span> / ${T.waterOz} oz</span></div></div>
-    <div class="bar"><i style="width:${pct(d.water || 0, T.waterOz)}%"></i></div>
-    ${editable ? `<div class="btnrow mt">
-      <button class="btn ghost" data-act="food.water" data-n="-8">−8</button>
-      <button class="btn ghost" data-act="food.water" data-n="8">+8</button>
-      <button class="btn ghost" data-act="food.water" data-n="16">+16</button>
-      <button class="btn" data-act="food.water" data-n="32">+32 oz</button></div>` : ''}
-  </section>`;
+  ${waterPanel(k, editable)}`;
 }
 
 reg('food.day', el => {
@@ -684,21 +676,26 @@ export function recTargets(tdee) {
   return { kcal, p: pr, c: r5((kcal - pr * 4 - f * 9) / 4), f };
 }
 const goalText = r => r > 0 ? `gain <b>+${r} lb/week</b>` : r < 0 ? `lose <b>${-r} lb/week</b>` : '<b>maintain</b> your weight';
+// A sample meal that names an ingredient on your allergy list (e.g. almonds) is never offered as allergy-compatible.
+function sampleConflict(m) { for (const [id] of m.items) { const f = H.FOODS.find(x => x.id === id); const hit = f && allergenHit(f.n); if (hit) return f.n.toLowerCase(); } return null; }
 function planView() {
   const T = S.settings.targets, Ex = tdeeCalc(), R = recTargets(Ex.est), diff = R.kcal - T.kcal, p = S.health.profile, bulking = p.goalRate > 0;
   const F = id => H.FOODS.find(f => f.id === id);
   let all = 0, allP = 0;
   const meals = H.SAMPLE_DAY.map((m, i) => {
     const kc = m.items.reduce((a, [id, q]) => a + F(id).kcal * q, 0), pr = m.items.reduce((a, [id, q]) => a + F(id).p * q, 0); all += kc; allP += pr;
-    return `<div class="row"><div class="grow"><div class="rt sm">${slotName(m.meal)}</div><div class="rs">${m.items.map(([id, q]) => `${q !== 1 ? q + '× ' : ''}${esc(F(id).n)}`).join(', ')}</div><div class="rs">${fmt(kc)} kcal · ${r1(pr)} g protein</div></div><button class="btn ghost sm" data-act="food.logsample" data-i="${i}">Log</button></div>`;
+    const hit = sampleConflict(m);
+    return `<div class="row"><div class="grow"><div class="rt sm">${slotName(m.meal)}${hit ? ` <span class="badge red">Contains ${esc(hit)}</span>` : ''}</div><div class="rs">${m.items.map(([id, q]) => `${q !== 1 ? q + '× ' : ''}${esc(F(id).n)}`).join(', ')}</div><div class="rs">${fmt(kc)} kcal · ${r1(pr)} g protein${hit ? ' · conflicts with your allergy list, not recommended' : ''}</div></div>${hit ? '' : `<button class="btn ghost sm" data-act="food.logsample" data-i="${i}">Log</button>`}</div>`;
   });
+  const PR = S.settings.planRange;
   return `<section class="panel"><div class="ptitle"><span>Calorie target</span></div>
+    ${PR ? `<div class="donebox" style="margin:0 0 12px">Your meal plan's starting range: <b>${fmt(PR.lo)}–${fmt(PR.hi)} kcal</b>/day. Your target stays at ${fmt(T.kcal)} kcal unless you change it. The range is a starting point, not a guaranteed surplus: your weight trend tells you if it's working.</div>` : ''}
     <div class="bigline"><div><b>${fmt(T.kcal)}</b><span> kcal now</span></div><div><b>${fmt(Ex.est)}</b><span> burned / day (est.)</span></div></div>
     <div class="note" style="margin-top:0">${Ex.obs == null ? `This is a formula estimate from your lean mass (${r1(Body.curWeight() * (1 - p.bf / 100))} lb) and activity. After <b>7+ days of food logs and 5+ weigh-ins</b>, it learns your real burn from your weight trend. So far: ${Ex.n} days logged, ${Ex.wi} weigh-ins.` : `Learned from ${Ex.n} logged days and ${Ex.wi} weigh-ins (${Math.round(Ex.conf * 100)}% confidence). Your real data says you burn about ${fmt(Ex.obs)} kcal/day.`}</div>
     ${Math.abs(diff) >= 50 || R.p !== T.p ? `<div class="donebox">To ${goalText(p.goalRate)}: <b>${fmt(R.kcal)} kcal</b> (${diff >= 0 ? '+' : ''}${fmt(diff)}) · ${R.p} g protein · ${R.c} g carbs · ${R.f} g fat</div>
       <button class="btn full mt" data-act="food.applytargets">Use these targets</button><div class="note">This also changes what your daily nutrition quest asks for.</div>` : `<div class="donebox">Your targets match your goal to ${goalText(p.goalRate)}.</div>`}
     <div class="note">Goal, body fat %, activity and protein are in Profile → Settings → Body & plan.</div></section>
-  ${bulking ? `<section class="panel"><div class="ptitle"><span>Sample bulking day</span></div><div class="note" style="margin-top:0">Peanut-free. About <b>${fmt(all)} kcal</b> and ${r1(allP)} g protein. Tap Log to add a meal to that slot today.</div>${meals.join('')}</section>
+  ${bulking ? `<section class="panel"><div class="ptitle"><span>Sample bulking day</span></div><div class="note" style="margin-top:0">Checked against your allergy list by food name only, so always check real ingredient labels. About <b>${fmt(all)} kcal</b> and ${r1(allP)} g protein. Tap Log to add a meal to that slot today.</div>${meals.join('')}</section>
   <section class="panel"><div class="ptitle"><span>Mass shake</span></div><div class="rt sm">1,148 kcal · 83 g protein · peanut-free</div><div class="note">${esc(H.MASS_SHAKE_NOTE)}</div>
     <button class="btn ghost full mt" data-act="food.saveshake">Save to My Meals</button></section>
   <section class="panel"><div class="ptitle"><span>Hard-gainer tips</span></div>
@@ -716,6 +713,7 @@ reg('food.applytargets', async () => {
 });
 reg('food.logsample', async el => {
   const m = H.SAMPLE_DAY[+el.dataset.i], F = id => H.FOODS.find(f => f.id === id);
+  if (sampleConflict(m)) return toast('This sample meal conflicts with your allergy list.');
   const t = m.items.reduce((a, [id, q]) => { const f = F(id); a.kcal += f.kcal * q; a.p += f.p * q; a.c += f.c * q; a.f += f.f * q; return a; }, { kcal: 0, p: 0, c: 0, f: 0 });
   await logEntry({ name: `${slotName(m.meal)} (sample)`, base: t, amount: 1, src: 'plan', meal: m.meal }, null);
 });

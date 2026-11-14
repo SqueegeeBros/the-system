@@ -62,3 +62,18 @@ Progress photos are not included in backups because of their size.
 - **Side quests:** +10 XP each, never penalized. **PRs:** +15 XP. **Milestones:** S 50 · M 100 · L 200 · XL 400 XP.
 
 Every number above can be changed in **Settings**.
+
+
+## Face (Health → Face)
+
+- **Weekly photos:** a front and a side photo once a week, with an optional opposite side. You can use the in-app camera with a positioning outline and a faint copy of last week's photo, or pick from the gallery. Photos are never filtered or edited.
+- **Compare:** side by side or a slider. It defaults to baseline vs. latest with matching views, or you can pick any two check-ins.
+- **Analyze comparison** runs only when you tap it and confirm. It uses your Gemini key and sends just the two photos and a short summary of your logs. Results are saved, so they aren't requested again unless you tap Regenerate.
+- **Skin check-in (about 30 seconds):** breakouts, irritation, tender bumps, redness, healing marks and puffiness. You can also tap facial areas, add a hand count and a note. Every field is optional.
+- **Products:** your own products with morning/evening schedules, start and stop dates, and done/skipped/paused states. Product changes show on the skin trends.
+- **Grooming:** optional tasks with frequencies, plus brow, shaving and lip-care guides and a gua sha card.
+- **Weekly review:** built on the phone from your records. It costs no AI credits.
+
+**Storage:** Face photos and records are stored on the phone in their own database. They are **not** synced to your account and **not** included in the main backup or Drive backup. Use **Face → Data → Export file** to keep a copy. Clearing Chrome's site data or uninstalling the app deletes them.
+
+**Developer fixtures:** open the app with `?fixtures=face` to load sample data into a separate test database. Your real Face records aren't touched.

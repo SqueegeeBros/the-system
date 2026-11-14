@@ -8,6 +8,7 @@ import { notice, confirmBox, sheet, closeSheet, toast, busy, sheetOpen } from '.
 import * as H from '../data/health-data.js';
 import * as F from '../files.js';
 import * as Body from './body.js';
+import * as Face from './face.js';
 
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const norm = s => String(s || '').trim().toLowerCase();
@@ -18,29 +19,53 @@ const sgn = (x, d = 1) => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFix
 const fmtD = (k, o = { month: 'short', day: 'numeric', year: 'numeric' }) => parseKey(k).toLocaleDateString('en-US', o);
 
 /* ---------- navigation inside Health ---------- */
-export function open(v) { nav.sub.health = v; history.pushState({ hsub: v }, '', '#health'); rerender(); window.scrollTo(0, 0); }
+export function open(v) { nav.sub.health = v; if (v === 'face') nav.sub.face = null; history.pushState({ hsub: v }, '', '#health'); rerender(); window.scrollTo(0, 0); }
 reg('h.open', el => { closeSheet(); open(el.dataset.v); });
 reg('h.back', () => { if (history.state?.hsub) history.back(); else { nav.sub.health = null; rerender(); } });
-window.addEventListener('popstate', () => {
-  if (sheetOpen()) { closeSheet(); if (nav.tab === 'health' && nav.sub.health) history.pushState({ hsub: nav.sub.health }, '', '#health'); return; }
+window.addEventListener('popstate', e => {
+  if (sheetOpen()) { closeSheet(); if (nav.tab === 'health' && nav.sub.health) history.pushState({ hsub: nav.sub.health, fsub: nav.sub.face || undefined }, '', '#health'); return; }
+  if (nav.tab === 'health' && nav.sub.health === 'face' && (nav.sub.face || e.state?.hsub === 'face')) {
+    if (e.state?.cam) return;                       // camera overlay handles its own back
+    nav.sub.face = e.state?.hsub === 'face' ? (e.state.fsub || null) : null;
+    if (e.state?.hsub !== 'face') nav.sub.health = null;
+    rerender(); window.scrollTo(0, 0); return;
+  }
   if (nav.tab === 'health' && nav.sub.health) { nav.sub.health = null; rerender(); window.scrollTo(0, 0); }
 });
 
+const HI = {
+  face: '<path d="M12 3c4.4 0 7 3.3 7 8 0 5.5-3.5 10-7 10s-7-4.5-7-10c0-4.7 2.6-8 7-8z"/><path d="M9.5 15.5c1.5 1 3.5 1 5 0M9 10.5h.01M15 10.5h.01"/>',
+  training: '<path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/>',
+  pills: '<rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M10 7.5l4 8"/>',
+  body: '<path d="M5 20h14l-2-12H7z"/><path d="M9 8a3 3 0 0 1 6 0M12 12v3"/>',
+  dexa: '<path d="M8 4c-2 0-3 1.5-3 3s1.5 2 2 3-1 3-1 5 1 5 3 5M16 4c2 0 3 1.5 3 3s-1.5 2-2 3 1 3 1 5-1 5-3 5M9 9h6M9 14h6"/>',
+  labs: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M7.5 14h9"/>',
+  records: '<path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>',
+  symptoms: '<path d="M14 4v10.5a3.5 3.5 0 1 1-4 0V4a2 2 0 0 1 4 0z"/><path d="M12 15v-4"/>',
+  vitals: '<path d="M3 12h4l2-5 4 10 2-5h6"/>',
+  photos: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  visit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
+  emergency: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M12 9v6M9 12h6"/>',
+  news: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+};
+export const hicon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${HI[k] || ''}</svg>`;
 const TILES = [
-  ['training', '🏋️', 'Training', 'Sets, split, progress, history'], ['pills', '💊', 'Pills & meds', 'Morning · pre-workout · night'],
-  ['body', '⚖️', 'Weight & size', 'Weigh-ins, tape measurements'], ['dexa', '🦴', 'DEXA scans', 'Upload scans, lean vs fat'],
-  ['labs', '🧪', 'Lab results', 'Bloodwork with flags'], ['records', '📁', 'Records', 'Photos & PDFs of reports'],
-  ['symptoms', '🤒', 'Symptoms', 'Log how you feel'], ['vitals', '❤️', 'Sleep & vitals', 'Sleep, HRV, heart rate, BP'],
-  ['photos', '📸', 'Progress photos', 'Side-by-side changes'], ['visit', '📋', 'Doctor visit prep', 'One-page summary'],
-  ['emergency', '🚑', 'Emergency card', 'Allergies, meds, contact'], ['news', '📰', 'News & research', 'Newest studies'],
+  ['face', 'Face', 'Skin, weekly photos, routine'], ['training', 'Training', 'Sets, split, progress, history'],
+  ['pills', 'Pills & meds', 'Morning · pre-workout · night'], ['body', 'Weight & size', 'Weigh-ins, tape measurements'],
+  ['dexa', 'DEXA scans', 'Upload scans, lean vs fat'], ['labs', 'Lab results', 'Bloodwork with flags'],
+  ['records', 'Records', 'Photos & PDFs of reports'], ['symptoms', 'Symptoms', 'Log how you feel'],
+  ['vitals', 'Sleep & vitals', 'Sleep, HRV, heart rate, BP'], ['photos', 'Progress photos', 'Body photos, side by side'],
+  ['visit', 'Doctor visit prep', 'One-page summary'], ['emergency', 'Emergency card', 'Allergies, meds, contact'],
+  ['news', 'News & research', 'Newest studies'],
 ];
 
 const SUB = {};
+SUB.face = () => Face.render();
 export function render() {
   const v = nav.sub.health;
-  return `<div class="wrap">${v && SUB[v] ? `<button class="linkbtn back" data-act="h.back">‹ Health</button>${SUB[v]()}` : hub()}</div>`;
+  return `<div class="wrap">${v && SUB[v] ? `${v === 'face' ? '' : '<button class="linkbtn back" data-act="h.back">‹ Health</button>'}${SUB[v]()}` : hub()}</div>`;
 }
-export function mount(root) { F.hydrate(root); if (nav.sub.health === 'news') maybeRefreshNews(); }
+export function mount(root) { F.hydrate(root); if (nav.sub.health === 'news') maybeRefreshNews(); if (nav.sub.health === 'face') Face.mount(root); }
 
 /* ================= HUB ================= */
 function hub() {
@@ -55,8 +80,8 @@ function hub() {
     <div class="note" style="margin-top:-8px">${slotTime(slot)}</div>
     <div class="qlist mt">${items.map(it => pillRow(it, log)).join('') || '<div class="empty">Nothing scheduled right now.</div>'}</div>
     <button class="btn ghost full mt" data-act="h.open" data-v="pills">All pills & meds</button></section>
-  ${flagged ? `<button class="banner gold" data-act="h.open" data-v="labs">🧪 ${flagged} lab value${flagged > 1 ? 's' : ''} outside the typical range · review</button>` : ''}
-  <div class="htiles">${TILES.map(([v, ic, n, s]) => `<button class="htile" data-act="h.open" data-v="${v}"><span class="ic" aria-hidden="true">${ic}</span><b>${n}</b><span>${s}</span></button>`).join('')}</div>
+  ${flagged ? `<button class="banner gold" data-act="h.open" data-v="labs">${flagged} lab value${flagged > 1 ? 's' : ''} outside the typical range · review</button>` : ''}
+  <div class="htiles">${TILES.map(([v, n, s]) => `<button class="htile${v === 'face' ? ' feat' : ''}" data-act="h.open" data-v="${v}"><span class="ic">${hicon(v)}</span><b>${n}</b><span>${s}</span></button>`).join('')}</div>
   ${insights()}`;
 }
 
@@ -129,7 +154,7 @@ SUB.training = () => {
     ${names.length ? `<select data-chg="train.prog" aria-label="Exercise">${names.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
       <div class="sub mt">Estimated 1-rep max (lb), best set each session</div>${lineChart(pts)}
       ${S.prs[norm(sel)] ? `<div class="note">Best: ${S.prs[norm(sel)].w} lb × ${S.prs[norm(sel)].r} on ${niceDate(S.prs[norm(sel)].date)}</div>` : ''}
-      ${H.TIPS[norm(sel)] ? `<div class="note">💡 ${esc(H.TIPS[norm(sel)])}</div>` : ''}`
+      ${H.TIPS[norm(sel)] ? `<div class="note tip">${esc(H.TIPS[norm(sel)])}</div>` : ''}`
       : '<div class="empty">Finish a session to start tracking progress.</div>'}</section>
   <section class="panel"><div class="ptitle"><span>Why it works</span></div>${H.SCIENCE.map(([t, d]) => `<p class="para"><b>${t}.</b> <span class="muted">${d}</span></p>`).join('')}</section>`;
 };
@@ -338,7 +363,7 @@ reg('h.share', async () => {
 const EM_F = [['name', 'Full name'], ['dob', 'Date of birth'], ['blood', 'Blood type'], ['allergies', 'Allergies'], ['conditions', 'Medical conditions'], ['contact', 'Emergency contact (name + phone)'], ['notes', 'Other notes']];
 SUB.emergency = () => {
   const Em = HS().emergency, meds = [...H.SUPPS.filter(isOn).map(s => s.n), ...HS().meds.map(m => m.n)].join(', ');
-  return `<div class="ecard"><h2>🚑 Medical info</h2>${EM_F.filter(([k]) => Em[k]).map(([k, n]) => `<div class="erow"><span>${n}</span><b>${esc(Em[k])}</b></div>`).join('') || '<p>Fill in the form below.</p>'}
+  return `<div class="ecard"><h2>Medical info</h2>${EM_F.filter(([k]) => Em[k]).map(([k, n]) => `<div class="erow"><span>${n}</span><b>${esc(Em[k])}</b></div>`).join('') || '<p>Fill in the form below.</p>'}
     ${meds ? `<div class="erow"><span>Takes</span><b>${esc(meds)}</b></div>` : ''}</div>
   <div class="note">Tip: screenshot this card and set it as your lock screen, or copy it into Android's built-in Emergency information.</div>
   <section class="panel"><div class="ptitle"><span>Edit card</span></div>${EM_F.map(([k, n]) => `<label class="field"><span>${n}</span><input id="em-${k}" value="${esc(Em[k])}"></label>`).join('')}<button class="btn full mt" data-act="h.saveem">Save card</button></section>`;
@@ -414,12 +439,12 @@ reg('h.abstract', async el => {
 reg('h.search', () => {
   const q = norm($('#h-search').value); if (q.length < 2) return toast('Type at least 2 letters.');
   const hits = [];
-  HS().records.forEach(r => { if (norm(`${r.title} ${r.cat} ${r.notes}`).includes(q)) hits.push([r.d, '📁 ' + r.title, r.cat, 'records']); });
-  HS().labs.forEach(l => { const L = H.LABS.find(x => x.id === l.m), n = L ? L.n : l.m; if (norm(n).includes(q)) hits.push([l.d, '🧪 ' + n, `${l.v} ${L?.u || ''}`, 'labs']); });
-  HS().symptoms.forEach(s => { if (norm(`${s.n} ${s.note}`).includes(q)) hits.push([s.d, '🤒 ' + s.n, `${s.sev}/10`, 'symptoms']); });
-  HS().dexa.forEach(x => { if (norm(`dexa scan ${x.notes || ''}`).includes(q)) hits.push([x.d, '🦴 DEXA scan', `${r1(x.bf)}% body fat`, 'dexa']); });
-  [...H.SUPPS.map(s => s.n), ...HS().meds.map(m => m.n)].forEach(n => { if (norm(n).includes(q)) hits.push(['', '💊 ' + n, 'Pills & meds', 'pills']); });
-  S.workouts.forEach(w => { if (norm(w.name).includes(q) || w.exercises.some(e => norm(e.name).includes(q))) hits.push([w.date, '🏋️ ' + w.name, 'Workout', 'training']); });
+  HS().records.forEach(r => { if (norm(`${r.title} ${r.cat} ${r.notes}`).includes(q)) hits.push([r.d, '' + r.title, r.cat, 'records']); });
+  HS().labs.forEach(l => { const L = H.LABS.find(x => x.id === l.m), n = L ? L.n : l.m; if (norm(n).includes(q)) hits.push([l.d, '' + n, `${l.v} ${L?.u || ''}`, 'labs']); });
+  HS().symptoms.forEach(s => { if (norm(`${s.n} ${s.note}`).includes(q)) hits.push([s.d, '' + s.n, `${s.sev}/10`, 'symptoms']); });
+  HS().dexa.forEach(x => { if (norm(`dexa scan ${x.notes || ''}`).includes(q)) hits.push([x.d, 'DEXA scan', `${r1(x.bf)}% body fat`, 'dexa']); });
+  [...H.SUPPS.map(s => s.n), ...HS().meds.map(m => m.n)].forEach(n => { if (norm(n).includes(q)) hits.push(['', '' + n, 'Pills & meds', 'pills']); });
+  S.workouts.forEach(w => { if (norm(w.name).includes(q) || w.exercises.some(e => norm(e.name).includes(q))) hits.push([w.date, '' + w.name, 'Workout', 'training']); });
   hits.sort((a, b) => b[0].localeCompare(a[0]));
   sheet(`Results for “${q}”`, hits.slice(0, 50).map(h => `<button class="row btnrowitem" data-act="h.open" data-v="${h[3]}"><div class="grow"><div class="rt sm">${esc(h[1])}</div><div class="rs">${h[0] ? niceDate(h[0]) + ' · ' : ''}${esc(h[2])}</div></div><span class="rs">›</span></button>`).join('') || '<div class="empty">Nothing found.</div>');
 });

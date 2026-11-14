@@ -326,7 +326,7 @@ function activeView() {
         ${x.note ? `<div class="exnote">${esc(x.note)}</div>` : ''}
         <div class="qdesc">${last ? `Last time: ${last.map(s => `${s.w}×${s.r}`).join(', ')}` : 'First time. Set your baseline.'}</div>
         ${(() => { const pg = progression(x); return pg ? `<div class="donebox">${esc(pg.msg)}</div>` : ''; })()}
-        ${!last && !x.note && TIPS[norm(x.name)] ? `<div class="note">💡 ${esc(TIPS[norm(x.name)])}</div>` : ''}</div>
+        ${!last && !x.note && TIPS[norm(x.name)] ? `<div class="note tip">${esc(TIPS[norm(x.name)])}</div>` : ''}</div>
         <button class="iconbtn red" data-act="train.delex" data-ex="${i}" aria-label="Remove exercise">×</button></div>
       <div class="setchips">${x.sets.map((s, k) => s.done
         ? `<button class="setchip done" data-act="train.unlog" data-ex="${i}" data-s="${k}">${CHECK}${num(s.w)}×${num(s.r)}</button>`

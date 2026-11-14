@@ -39,6 +39,7 @@ export function defaults() {
       penaltyXP: 30,
       pausesPerMonth: 4,
       allergens: [],
+      bottleOz: 128,
       geminiKey: '',
       geminiModel: 'gemini-flash-latest',
       driveClientId: '',

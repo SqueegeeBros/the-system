@@ -162,3 +162,35 @@ ${context}`;
   const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
   try { return JSON.parse(text); } catch { return { reply: text || 'No answer. Try rephrasing.', foods: [] }; }
 }
+
+// ---------- Face: compare two check-in photos (explicit action only) ----------
+export async function faceCompare(b64A, b64B, meta, context) {
+  const prompt = `You compare two photos of the same person's face for a personal tracking app. Photo 1 is the EARLIER check-in (${meta.a}), photo 2 is the LATER one (${meta.b}). View: ${meta.view}.
+Describe only VISIBLE differences, in cautious language ("appears slightly less puffy", "no clear change"). Areas:
+- Cheek and under-eye puffiness
+- Apparent jawline definition
+- Visible breakouts
+- Redness and healing marks
+- Visible irritation (only if image quality permits)
+Rules:
+- "No clear change" is a normal, valid result. Do not invent change.
+- First check lighting, expression, head angle, camera distance/height, focus and resolution. If differences make the comparison unfair, set comparable to "limited" or "no" and say why.
+- Do not estimate body fat, diagnose any skin condition, name hormones, or suggest food intolerances. Do not rate attractiveness or call features flaws.
+- Keep observations separate from explanations. Never claim a food, salt, or product caused a change.
+- Next steps: 1 to 3, conservative and practical (photo consistency, keeping up the existing routine, documenting irritation, asking a clinician about painful or scarring spots). The person is gaining muscle slowly (lean bulk, lifting 5 days, active job): never suggest a calorie deficit, extra cardio, dehydration, cutting sodium hard, diuretics, detoxes, fasting, or cutting out foods.
+- Do not count spots.
+Logged context from the user's own records (self-reported, not measured):
+${context}`;
+  const AREAS = ['Cheek and under-eye puffiness', 'Jawline definition', 'Visible breakouts', 'Redness and healing marks', 'Visible irritation'];
+  return call([{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: b64A } }, { inlineData: { mimeType: 'image/jpeg', data: b64B } }], {
+    type: 'OBJECT',
+    properties: {
+      comparable: { type: 'STRING', enum: ['yes', 'limited', 'no'] },
+      summary: STR,
+      observations: { type: 'ARRAY', items: { type: 'OBJECT', properties: { area: { type: 'STRING', enum: AREAS }, change: { type: 'STRING', enum: ['appears less visible', 'appears more visible', 'no clear change', 'not assessable'] }, detail: STR }, required: ['area', 'change', 'detail'] } },
+      limitations: { type: 'ARRAY', items: STR },
+      nextSteps: { type: 'ARRAY', items: STR },
+    },
+    required: ['comparable', 'summary', 'observations', 'limitations', 'nextSteps'],
+  });
+}

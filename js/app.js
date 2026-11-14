@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -19,6 +19,7 @@ import { openOnboarding } from './views/onboard.js';
 import { autoBackup } from './backup.js';
 import * as Sync from './sync.js';
 import { migrateLegacyPhotos } from './files.js';
+import { loadFace, flushFace } from './face/store.js';
 
 // If Chrome renders in "Desktop site" mode on a phone (page ~980px wide on a ~360px screen),
 // scale the app back up so it looks like a phone app again.
@@ -32,6 +33,7 @@ window.addEventListener('resize', fitPhone);
 const VIEWS = { quests: Quests, food: Food, train: Train, work: Work, status: Status, settings: Settings, health: Health };
 const NAV_OF = { train: 'health', settings: 'status' };   // which bottom tab lights up
 const main = $('#view');
+let lastViewKey = '';
 
 // Text size and high contrast (Settings → Easier to see)
 export function applyDisplay() {
@@ -45,6 +47,8 @@ nav.render = () => {
   const v = VIEWS[nav.tab] || Quests;
   const y = window.scrollY;
   applyDisplay();
+  const key = [nav.tab, nav.sub.health, nav.sub.face, nav.sub.food].join('|');
+  if (key !== lastViewKey) { main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); lastViewKey = key; }
   main.innerHTML = v.render();
   v.mount?.(main);
   $('#fab').hidden = nav.tab === 'settings' || !!S.activeWorkout && nav.tab === 'train';
@@ -120,11 +124,12 @@ document.addEventListener('visibilitychange', async () => {
   }
   else flush();
 });
-window.addEventListener('pagehide', () => flush());
+window.addEventListener('pagehide', () => { flush(); flushFace(); });
 
 // ---------- Boot ----------
 (async function boot() {
   await load();
+  try { await loadFace(); } catch { }
   applyDisplay();
   // Pull newer data from your account BEFORE the day rollover runs, so penalties use your latest logs.
   try { await withTimeout(Sync.boot(), 6000); } catch { }
@@ -210,6 +215,30 @@ window.addEventListener('pagehide', () => flush());
     if (!S.health.emergency.allergies) S.health.emergency.allergies = 'Peanuts';
     S.migr.health1 = true; save();
   }
+  // One-time (v14): allergy restrictions, meal-plan templates and calorie range from the supplied plan.
+  if (!S.migr.face1) {
+    const al = S.settings.allergens, has = w => al.some(a => a.toLowerCase().includes(w));
+    const add = ['peanut', 'tree nut', 'almond', 'cashew', 'walnut', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut'].filter(w => !has(w));
+    S.settings.allergens = [...al, ...add];
+    const em = S.health.emergency;
+    const parts = String(em.allergies || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (!parts.some(x => /peanut/i.test(x))) parts.push('Peanuts');
+    if (!parts.some(x => /tree/i.test(x))) parts.push('Tree nuts');
+    em.allergies = parts.join(', ');
+    const T = (name, tag, kcal, p, c, f, ingredients, note) => ({ id: 'plan_' + name.toLowerCase().replace(/[^a-z]+/g, '_'), name, tag, kcal, p, c, f, servings: 1, ingredients, pinned: false, estimate: true, planTemplate: true, note, prep: { on: false, batches: 1 } });
+    const PLAN = [
+      T('Plan breakfast: eggs, oats, banana', 'Breakfast', 700, 37, 81, 25, [{ item: 'Eggs, large', qty: 4, unit: '' }, { item: 'Oats (dry weight)', qty: 80, unit: 'g' }, { item: 'Banana', qty: 1, unit: '' }], 'Estimate from your meal plan. Optional sausage is not included: log it separately. Enter label values to replace the estimate.'),
+      T('Plan training snack: banana + rice cakes', 'Pre-gym', 175, 3, 42, 1, [{ item: 'Banana', qty: 1, unit: '' }, { item: 'Rice cakes', qty: 2, unit: '' }], 'Estimate from your meal plan.'),
+      T('Plan lunch: chicken, rice, beans, veg', 'Lunch', 1010, 55, 146, 21, [{ item: 'Chicken breast (raw weight)', qty: 150, unit: 'g' }, { item: 'Rice (dry weight)', qty: 140, unit: 'g' }, { item: 'Beans (drained weight)', qty: 150, unit: 'g' }, { item: 'Vegetables', qty: 150, unit: 'g' }, { item: 'Olive oil', qty: 15, unit: 'g' }], 'Estimate from your meal plan. Weights: chicken raw, rice dry, beans drained.'),
+      T('Plan dinner: pasta, lentils, tomatoes', 'Dinner', 1045, 49, 175, 20, [{ item: 'Whole-wheat pasta (dry weight)', qty: 140, unit: 'g' }, { item: 'Lentils (dry weight)', qty: 100, unit: 'g' }, { item: 'Tomatoes', qty: 200, unit: 'g' }, { item: 'Vegetables', qty: 100, unit: 'g' }, { item: 'Olive oil', qty: 15, unit: 'g' }], 'Estimate from your meal plan. Weights: pasta and lentils dry.'),
+      T('Plan add-on: whole-grain bread or bagel', 'Snack', 160, 8, 28, 2, [{ item: 'Whole-grain bread (2 slices) or 1 bagel', qty: 1, unit: '' }], 'Estimate for 2 slices of bread. A bagel is about 280 kcal: edit the amount when you log it. Log what you put on it separately and check its label for nuts.'),
+    ];
+    let added = 0;
+    PLAN.forEach(m => { if (!S.meals.some(x => x.name === m.name || x.id === m.id)) { S.meals.push(m); added++; } });
+    S.settings.planRange = S.settings.planRange || { lo: 3200, hi: 3400 };
+    S.migr.face1 = true; save();
+    if (added || add.length) toast(`${added ? `${added} meal-plan templates added to My Meals (estimates)` : ''}${added && add.length ? ' · ' : ''}${add.length ? 'Tree-nut allergy words added' : ''}`);
+  }
   let introShown = false;
   if (!S.migr.swapPP && S.profile.name === 'Nathan') {
     if (S.settings.split[3] === 'pull' && S.settings.split[4] === 'push') { S.settings.split[3] = 'push'; S.settings.split[4] = 'pull'; toast('Wednesday is Push, Thursday is Pull'); }
@@ -219,6 +248,10 @@ window.addEventListener('pagehide', () => flush());
   else if (!S.seenHealthIntro) {
     S.seenHealthIntro = true; introShown = true; save();
     notice({ title: 'New: Health', html: `<div class="msg sm">Train moved into the new <b>Health</b> tab, with sets this week per muscle, your split, progress and history. Health also has pills & meds, recovery check-ins, DEXA scans, labs, records, symptoms and research news.<br><br>Fuel now has meal slots (pre-workout, post-workout, dinner…), food search and a <b>Plan</b> page.<br><br>To sync your phone and computer, sign in under <b>Profile → Settings → Account & sync</b>. Text size is there too.</div>`, btn: 'Got it' });
+  }
+  if (S.onboarded && !S.seenFaceIntro && !introShown) {
+    S.seenFaceIntro = true; introShown = true; save();
+    notice({ title: 'New: Face', html: `<div class="msg sm">Health now has <b>Face</b>: weekly front and side photos with comparisons, a 30-second skin check-in, your skincare routine, and grooming reminders.<br><br>Face photos and skin records stay on this phone. They aren't synced or included in the main backup, so use <b>Face → Data → Export</b> to keep a copy.<br><br>Fuel's water card now works in bottles, with undo.</div>`, btn: 'Got it' });
   }
   if (S.appVersion && S.appVersion < APP_VERSION && !introShown) toast('The System updated. New features are live.');
   if (S.appVersion !== APP_VERSION) { S.appVersion = APP_VERSION; save(); }

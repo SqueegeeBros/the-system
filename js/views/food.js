@@ -6,6 +6,7 @@ import { reg, regChg, nav, rerender, go, ACT } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast, busy } from '../ui.js';
 import * as AI from '../ai.js';
 import * as BC from '../barcode.js';
+import { healthCard } from '../healthcard.js';
 import { takePhoto } from '../camera.js';
 import * as H from '../data/health-data.js';
 import * as Body from './body.js';
@@ -334,51 +335,62 @@ reg('food.photolog', async el => {
   await logEntry({ name: name.slice(0, 60), base: sum, amount: 1, src: 'photo' }, el.dataset.peanut ? 'peanut' : null);
 });
 
-// ---------- Barcode ----------
+// ---------- Barcode (Today → Barcode and Fuel → Barcode) ----------
+// Scan → health check pops up → Log it or Delete (discard and scan the next one).
 let stopScan = null;
+function bcStartLive() {
+  if (!BC.canScan()) return;
+  const v = $('#bc-video'); if (!v) return;
+  $('.scanbox')?.classList.remove('hide');
+  BC.startScan(v, code => { stopScan = null; navigator.vibrate?.(40); $('#bc-code').value = code; bcLookup(code); })
+    .then(s => { stopScan = s; })
+    .catch(() => { if (!$('#bc-camerr')) $('.scanbox')?.insertAdjacentHTML('afterend', '<div class="alert" id="bc-camerr">Camera blocked. Allow camera access for this app in Chrome’s site settings, or type the number.</div>'); });
+}
 reg('food.barcode', () => {
   const live = BC.canScan();
-  sheet('Scan barcode', `
+  sheet('Scan food', `
     ${live ? `<div class="scanbox"><video id="bc-video" playsinline muted></video><div class="scanline"></div></div>
-      <div class="note">Point the camera at the barcode.</div>` : `<div class="note">Live scanning isn’t available in this browser. Type the number under the barcode.</div>`}
-    <div class="inline mt"><input id="bc-code" inputmode="numeric" placeholder="Barcode number"><button class="btn" data-act="food.bclookup">Look up</button></div>
+      <div class="note" id="bc-hint">Point the camera at the barcode. You'll see how healthy it is before you log anything.</div>` : `<div class="note">Live scanning isn’t available in this browser. Type the number under the barcode.</div>`}
+    <div class="inline mt" id="bc-entry"><input id="bc-code" inputmode="numeric" placeholder="Barcode number" autocomplete="off"><button class="btn" data-act="food.bclookup">Check</button></div>
     <div id="bc-result"></div>`, {
-    onMount: async () => {
-      if (!live) return;
-      try { stopScan = await BC.startScan($('#bc-video'), code => { $('#bc-code').value = code; bcLookup(code); }); }
-      catch { $('.scanbox')?.insertAdjacentHTML('afterend', '<div class="alert">Camera blocked. Allow camera access, or type the number.</div>'); }
-    },
-    onClose: () => { stopScan?.(); stopScan = null; },
+    onMount: () => bcStartLive(),
+    onClose: () => { stopScan?.(); stopScan = null; product = null; },
   });
 });
-reg('food.bclookup', () => { const c = $('#bc-code').value.trim(); if (c) { stopScan?.(); bcLookup(c); } });
+reg('food.bclookup', () => { const c = $('#bc-code').value.trim().replace(/\D/g, ''); if (c) { stopScan?.(); stopScan = null; bcLookup(c); } });
+reg('food.bcdelete', () => {
+  product = null; $('#bc-result').innerHTML = ''; $('#bc-code').value = '';
+  $('#bc-hint') && ($('#bc-hint').hidden = false); $('#bc-entry').hidden = false;
+  bcStartLive();
+});
 
 let product = null;
 async function bcLookup(code) {
   const out = $('#bc-result');
   if (!out) return;
-  out.innerHTML = busy('Looking it up…');
+  $('.scanbox')?.classList.add('hide'); if ($('#bc-hint')) $('#bc-hint').hidden = true;
+  out.innerHTML = busy('Checking this food…');
   try { product = await BC.lookup(code); }
-  catch (e) { out.innerHTML = `<div class="alert">${esc(e.message)}</div>`; return; }
+  catch (e) { out.innerHTML = `<div class="alert">${esc(e.message)}</div><div class="btnrow mt"><button class="btn ghost" data-act="food.bcdelete">Scan again</button></div>`; return; }
   if (!product || (!product.per100 && !product.perServing)) {
-    out.innerHTML = `<div class="alert">Not found in Open Food Facts${product ? ' (no nutrition data)' : ''}. Use manual entry.</div>
-      <button class="btn ghost full mt" data-act="food.manual">Manual entry</button>`;
+    out.innerHTML = `<div class="alert">Not found in Open Food Facts${product ? ' (no nutrition data)' : ''}. Check the label, or enter it manually.</div>
+      <div class="btnrow mt"><button class="btn ghost" data-act="food.bcdelete">Scan again</button><button class="btn" data-act="food.manual">Manual entry</button></div>`;
     return;
   }
   const useServ = !!product.perServing;
-  const hc = BC.healthCheck(product, S.settings.allergens); product.flag = hc.allergen || null;
-  const wasPeanut = (product.peanut && peanutOn()) || allergenHit(product.name);
+  const hc = BC.healthCheck(product, S.settings.allergens); product.flag = hc.allergen || null; product.hc = hc;
+  BC.remember(product, hc);
+  $('#bc-entry').hidden = true;
   out.innerHTML = `
-    ${hc.tier === 'stop' ? `<div class="alert">${esc(hc.sub)}</div>` : wasPeanut ? `<div class="alert">This product lists <b>peanut</b> (or traces).</div>` : ''}
-    ${hc.tier !== 'stop' ? `<div class="sc-chip ${hc.tier}"><i class="sc-dot ${hc.tier}"></i><span>Health check: <b>${esc(hc.title)}</b>${hc.reasons[0] ? ` · ${esc((hc.reasons.find(r => r.s < 0) || hc.reasons[hc.reasons.length - 1]).t)}` : ''}</span></div>` : ''}
-    <div class="rt mt">${esc(product.name)}</div><div class="rs">${esc(product.brand)}${product.servingSize ? ` · serving ${esc(product.servingSize)}` : ''}</div>
+    ${healthCard(product, hc, { showMacros: false })}
     <div class="amtchips">${bcChips(useServ).map(([v, l]) => `<button class="amtchip${l === (useServ ? '1' : '') ? ' on' : ''}" data-bcv="${v}">${l}</button>`).join('')}</div>
     <div class="inline">
       <label class="field grow"><span>${useServ ? 'Servings' : 'Grams'}</span>
         <input id="bc-amt" type="number" inputmode="decimal" value="${useServ ? 1 : product.servingG || 100}" step="${useServ ? 0.25 : 5}"></label>
     </div>
     <div class="bcmacro" id="bc-macro"></div>
-    <div class="btnrow mt"><button class="btn ghost" data-act="food.bcsave">Save as meal</button><button class="btn" data-act="food.bclog">Log</button></div>`;
+    <div class="btnrow mt bc-acts"><button class="btn danger" data-act="food.bcdelete">Delete</button><button class="btn" data-act="food.bclog">Log</button></div>
+    <button class="linkbtn mt" data-act="food.bcsave" style="width:100%;text-align:center">Save as a meal instead</button>`;
   const upd = () => { const m = bcMacros(); $('#bc-macro').textContent = `${fmt(m.kcal)} kcal · ${r1(m.p)}P / ${r1(m.c)}C / ${r1(m.f)}F`; };
   $('#bc-amt').oninput = upd; upd();
   out.querySelectorAll('[data-bcv]').forEach(btn => btn.onclick = () => {

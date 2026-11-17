@@ -52,7 +52,7 @@ const HI = {
 };
 export const hicon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${HI[k] || ''}</svg>`;
 const TILES = [
-  ['face', 'Face', 'Skin, weekly photos, routine'], ['scan', 'Food scanner', 'Scan a barcode: good pick or not'], ['training', 'Training', 'Sets, split, progress, history'],
+  ['face', 'Face', 'Skin, weekly photos, routine'], ['scan', 'Food scanner', 'Allergy check and nutrition facts'], ['training', 'Training', 'Sets, split, progress, history'],
   ['pills', 'Pills & meds', 'Morning · pre-workout · night'], ['body', 'Weight & size', 'Weigh-ins, tape measurements'],
   ['dexa', 'DEXA scans', 'Upload scans, lean vs fat'], ['labs', 'Lab results', 'Bloodwork with flags'],
   ['records', 'Records', 'Photos & PDFs of reports'], ['symptoms', 'Symptoms', 'Log how you feel'],

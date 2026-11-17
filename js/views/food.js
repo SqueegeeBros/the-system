@@ -6,7 +6,7 @@ import { reg, regChg, nav, rerender, go, ACT } from '../core.js';
 import { notice, confirmBox, sheet, closeSheet, toast, busy } from '../ui.js';
 import * as AI from '../ai.js';
 import * as BC from '../barcode.js';
-import { healthCard } from '../healthcard.js';
+import { scanCard, wireScanCard, allergyPanel, forAmount, containerAmount } from '../healthcard.js';
 import { takePhoto } from '../camera.js';
 import * as H from '../data/health-data.js';
 import * as Body from './body.js';
@@ -35,7 +35,12 @@ const ICON = {
 // ---------- Peanut / allergen check ----------
 export function allergenHit(text) {
   const t = String(text || '').toLowerCase();
-  return S.settings.allergens.find(a => a && t.includes(a.toLowerCase())) || null;
+  const own = S.settings.allergens.find(a => a && t.includes(a.toLowerCase()));
+  if (own) return own;
+  // Full FDA tree-nut list and peanut synonyms apply whenever your list has that group, even if a nut name isn't on it.
+  const g = BC.groupsFor(S.settings.allergens), main = BC.splitIngredients(t).main;
+  const m = (g.tree && main.match(BC.TREE_RE)) || (g.peanut && main.match(BC.PEANUT_RE));
+  return m ? m[1] : null;
 }
 const mealText = m => [m.name, ...(m.ingredients || []).map(i => i.item)].join(' ');
 const mealHasAllergen = m => (m.peanut && peanutOn()) || allergenHit(mealText(m));
@@ -364,69 +369,49 @@ reg('food.bcdelete', () => {
   bcStartLive();
 });
 
-let product = null;
+let product = null, bcAllergy = null, bcAmount = null;
 async function bcLookup(code) {
   const out = $('#bc-result');
   if (!out) return;
   $('.scanbox')?.classList.add('hide'); if ($('#bc-hint')) $('#bc-hint').hidden = true;
   out.innerHTML = busy('Checking this food…');
   try { product = await BC.lookup(code); }
-  catch (e) { out.innerHTML = `<div class="alert">${esc(e.message)}</div><div class="btnrow mt"><button class="btn ghost" data-act="food.bcdelete">Scan again</button></div>`; return; }
-  if (!product || (!product.per100 && !product.perServing)) {
-    out.innerHTML = `<div class="alert">Not found in Open Food Facts${product ? ' (no nutrition data)' : ''}. Check the label, or enter it manually.</div>
-      <div class="btnrow mt"><button class="btn ghost" data-act="food.bcdelete">Scan again</button><button class="btn" data-act="food.manual">Manual entry</button></div>`;
+  catch (e) { out.innerHTML = `<div class="alert">${esc(e.message)}</div><div class="btnrow mt"><button class="btn ghost" data-act="food.bcdelete">Scan again</button><button class="btn" data-act="food.manual">Manual entry</button></div>`; return; }
+  if (!product) {
+    out.innerHTML = `<div class="sc2">${allergyPanel({ state: 'D', title: 'Not enough information', body: 'This barcode isn’t in Open Food Facts. Read the package before eating.' })}</div>
+      <div class="btnrow mt"><button class="btn ghost" data-act="food.bcdelete">Scan again</button><button class="btn" data-act="food.manual">Enter from label</button></div>`;
     return;
   }
-  const useServ = !!product.perServing;
-  const hc = BC.healthCheck(product, S.settings.allergens); product.flag = hc.allergen || null; product.hc = hc;
-  BC.remember(product, hc);
+  bcAllergy = BC.allergyCheck(product, S.settings.allergens);
+  BC.remember(product, bcAllergy);
   $('#bc-entry').hidden = true;
-  out.innerHTML = `
-    ${healthCard(product, hc, { showMacros: false })}
-    <div class="amtchips">${bcChips(useServ).map(([v, l]) => `<button class="amtchip${l === (useServ ? '1' : '') ? ' on' : ''}" data-bcv="${v}">${l}</button>`).join('')}</div>
-    <div class="inline">
-      <label class="field grow"><span>${useServ ? 'Servings' : 'Grams'}</span>
-        <input id="bc-amt" type="number" inputmode="decimal" value="${useServ ? 1 : product.servingG || 100}" step="${useServ ? 0.25 : 5}"></label>
-    </div>
-    <div class="bcmacro" id="bc-macro"></div>
-    <div class="btnrow mt bc-acts"><button class="btn danger" data-act="food.bcdelete">Delete</button><button class="btn" data-act="food.bclog">Log</button></div>
-    <button class="linkbtn mt" data-act="food.bcsave" style="width:100%;text-align:center">Save as a meal instead</button>`;
-  const upd = () => { const m = bcMacros(); $('#bc-macro').textContent = `${fmt(m.kcal)} kcal · ${r1(m.p)}P / ${r1(m.c)}C / ${r1(m.f)}F`; };
-  $('#bc-amt').oninput = upd; upd();
-  out.querySelectorAll('[data-bcv]').forEach(btn => btn.onclick = () => {
-    $('#bc-amt').value = btn.dataset.bcv; out.querySelectorAll('[data-bcv]').forEach(x => x.classList.toggle('on', x === btn)); upd(); });
+  const canLog = !!(product.perServing || product.per100);
+  out.innerHTML = `${scanCard(product, bcAllergy)}
+    <div class="btnrow mt bc-acts"><button class="btn ghost" data-act="food.bcdelete">Delete</button>${canLog ? `<button class="btn${bcAllergy.state === 'A' ? ' danger' : ''}" data-act="food.bclog">${BC.LOG_LABEL[bcAllergy.state]}</button>` : `<button class="btn" data-act="food.manual">Enter from label</button>`}</div>
+    ${canLog ? '<button class="linkbtn mt" data-act="food.bcsave" style="width:100%;text-align:center">Save as a meal instead</button>' : ''}`;
+  bcAmount = wireScanCard(out, product, { onWrong: () => ACT['food.manual']() });
 }
-function bcContainer(useServ) {
-  if (!product.packageG) return null;
-  if (!useServ) return product.packageG;
-  return product.servingG ? r1(product.packageG / product.servingG) : null;
+const bcName = amt => `${product.name}${product.perServing ? (amt !== 1 ? ` ×${r1(amt)}` : '') : ` (${r1(amt)} g)`}`;
+// Allergy states: A declared → confirm before logging; B precautionary → confirm; C → log; D → button says "Log after checking label".
+export async function scanLogConfirm(p, a) {
+  if (a.state === 'A') return confirmBox('Allergen warning', `<b>${esc(p.name)}</b>: ${esc(a.title.toLowerCase())}, which is on your allergy list.<br>Log it anyway?`, 'Log anyway', true);
+  if (a.state === 'B') return confirmBox('Precautionary label', `${esc(a.body)}<br>Log it?`, 'Log', false);
+  return true;
 }
-function bcChips(useServ) {
-  const c = bcContainer(useServ), label = product.packageLabel ? `Whole container (${product.packageLabel})` : 'Whole container';
-  const list = useServ ? [[0.5, '½'], [1, '1'], [1.5, '1½'], [2, '2'], [3, '3']]
-    : [...new Set([50, 100, product.servingG, 200].filter(Boolean).map(Math.round))].map(g => [g, `${g} g`]);
-  if (c) list.push([c, label]);
-  return list;
-}
-function bcMacros() {
-  const amt = num($('#bc-amt')?.value);
-  const base = product.perServing || product.per100, factor = product.perServing ? amt : amt / 100;
-  return { kcal: base.kcal * factor, p: base.p * factor, c: base.c * factor, f: base.f * factor };
-}
-const bcName = () => { const amt = num($('#bc-amt').value); return `${product.name}${product.perServing ? (amt !== 1 ? ` ×${r1(amt)}` : '') : ` (${r1(amt)} g)`}`; };
 reg('food.bclog', async () => {
-  const useServ = !!product.perServing, flag = product.flag || (product.peanut ? 'peanut' : allergenHit(product.name));
-  const base = product.perServing || product.per100;
-  const entry = { name: product.name, base: { kcal: base.kcal, p: base.p, c: base.c, f: base.f }, mode: useServ ? 'serving' : 'gram',
-    amount: num($('#bc-amt').value), container: bcContainer(useServ), servingG: product.servingG, src: 'barcode' };
+  if (!product) return;
+  if (!(await scanLogConfirm(product, bcAllergy))) return;
+  const serv = !!product.perServing, base = product.perServing || product.per100;
+  const entry = { name: product.name, base: { kcal: base.kcal, p: base.p, c: base.c, f: base.f }, mode: serv ? 'serving' : 'gram',
+    amount: bcAmount(), container: containerAmount(product), servingG: product.servingG, src: 'barcode' };
   closeSheet();
-  await logEntry(entry, flag);
+  await logEntry(entry, null);
 });
 reg('food.bcsave', () => {
-  const m = bcMacros();
-  S.meals.push({ id: uid(), name: bcName(), tag: 'Snack', kcal: Math.round(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f), servings: 1,
-    ingredients: [{ item: product.name, qty: 1, unit: '' }], pinned: false, estimate: false, peanut: product.peanut, prep: { on: false, batches: 1 },
-    container: product.perServing ? bcContainer(true) : null });
+  const amt = bcAmount(), m = forAmount(product, amt);
+  S.meals.push({ id: uid(), name: bcName(amt), tag: 'Snack', kcal: Math.round(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f), servings: 1,
+    ingredients: [{ item: product.name, qty: 1, unit: '' }], pinned: false, estimate: false, peanut: bcAllergy?.state === 'A' && /peanut/.test(bcAllergy.word || ''), prep: { on: false, batches: 1 },
+    container: product.perServing ? containerAmount(product) : null });
   save(); toast('Saved to My Meals');
 });
 
@@ -437,7 +422,7 @@ function mealsView() {
     <div class="btnrow"><button class="btn ghost" data-act="food.newmeal">+ New meal</button><button class="btn" data-act="food.aimeal">Build with AI</button></div>
     <div class="note">Pinned meals show up in Quick Log for one-tap logging. Macros are per serving.</div>
   </section>
-  ${S.mealsArchive?.meals?.length ? `<section class="panel"><div class="note" style="margin-top:0">${S.mealsArchive.meals.length} older meal${S.mealsArchive.meals.length > 1 ? 's were' : ' was'} removed when your Sunday prep plan was set up. Past log entries are unchanged.</div>
+  ${S.mealsArchive?.meals?.length ? `<section class="panel"><div class="note" style="margin-top:0">${S.mealsArchive.meals.length} older meal${S.mealsArchive.meals.length > 1 ? 's were' : ' was'} archived when your meal plan changed. Past log entries are unchanged.</div>
     <div class="btnrow mt"><button class="btn ghost sm" data-act="food.restoremeals">Restore them</button><button class="btn ghost sm" data-act="food.forgetmeals">Delete for good</button></div></section>` : ''}
   <section class="panel">
     <div class="ptitle"><span>My meals</span></div>
@@ -565,13 +550,15 @@ function shoppingItems() {
       const key = `${i.item.toLowerCase().trim()}|${(i.unit || '').toLowerCase().trim()}`;
       const cur = map.get(key) || { key, item: i.item, unit: i.unit || '', qty: 0, from: new Set() };
       cur.qty += num(i.qty) * (m.prep.batches || 1);
+      cur.pkg = cur.pkg || i.pkg || null;
       cur.from.add(m.name);
       map.set(key, cur);
     });
   });
   return [...map.values()].sort((a, b) => a.item.localeCompare(b.item));
 }
-const qtyStr = i => i.qty ? (i.unit ? `${r1(i.qty)} ${i.unit}` : `×${r1(i.qty)}`) : '';
+const pkgStr = i => !i.pkg || !i.qty ? '' : i.pkg.ceil === false ? ` · ${r1(i.qty / i.pkg.size)} ${i.pkg.label}` : ` · ${Math.ceil(i.qty / i.pkg.size - 1e-9)} × ${i.pkg.label}`;
+const qtyStr = i => i.qty ? (i.unit ? `${r1(i.qty)} ${i.unit}` : `×${r1(i.qty)}`) + pkgStr(i) : '';
 
 function shopView() {
   const items = shoppingItems(), ch = S.shopping.checked;
@@ -591,6 +578,7 @@ function shopView() {
       <input type="checkbox" data-chg="food.shopcheck" data-key="${esc(i.key)}" ${ch[i.key] ? 'checked' : ''}>
       <span class="grow">${esc(i.item)}</span><span class="rs">${esc(qtyStr(i))}</span></label>`).join('')
       : '<div class="empty">Nothing yet. Turn on meals above that have ingredients.</div>'}
+    ${items.some(i => i.pkg) ? '<div class="note">Package counts use typical US sizes and round up, so some packages last longer than a week. Edit a meal to match your store.</div>' : ''}
     <div class="sub mt">Extras</div>
     ${S.shopping.extras.map(x => `<div class="row ${x.checked ? 'struck' : ''}">
       <label class="check grow"><input type="checkbox" data-chg="food.extracheck" data-id="${x.id}" ${x.checked ? 'checked' : ''}> ${esc(x.item)}</label>
@@ -696,7 +684,7 @@ export function recTargets(tdee) {
 }
 const goalText = r => r > 0 ? `gain <b>+${r} lb/week</b>` : r < 0 ? `lose <b>${-r} lb/week</b>` : '<b>maintain</b> your weight';
 // A sample meal that names an ingredient on your allergy list (e.g. almonds) is never offered as allergy-compatible.
-function sampleConflict(m) { for (const [id] of m.items) { const f = H.FOODS.find(x => x.id === id); const hit = f && allergenHit(f.n); if (hit) return f.n.toLowerCase(); } return null; }
+function sampleConflict(m) { for (const [id] of m.items) { const f = H.FOODS.find(x => x.id === id); const hit = f && (f.allergen || allergenHit(f.n)); if (hit) return f.n.toLowerCase(); } return null; }
 function planView() {
   const T = S.settings.targets, Ex = tdeeCalc(), R = recTargets(Ex.est), diff = R.kcal - T.kcal, p = S.health.profile, bulking = p.goalRate > 0;
   const F = id => H.FOODS.find(f => f.id === id);
@@ -714,9 +702,9 @@ function planView() {
     ${Math.abs(diff) >= 50 || R.p !== T.p ? `<div class="donebox">To ${goalText(p.goalRate)}: <b>${fmt(R.kcal)} kcal</b> (${diff >= 0 ? '+' : ''}${fmt(diff)}) · ${R.p} g protein · ${R.c} g carbs · ${R.f} g fat</div>
       <button class="btn full mt" data-act="food.applytargets">Use these targets</button><div class="note">This also changes what your daily nutrition quest asks for.</div>` : `<div class="donebox">Your targets match your goal to ${goalText(p.goalRate)}.</div>`}
     <div class="note">Goal, body fat %, activity and protein are in Profile → Settings → Body & plan.</div></section>
-  ${bulking ? `<section class="panel"><div class="ptitle"><span>Sample bulking day</span></div><div class="note" style="margin-top:0">Checked against your allergy list by food name only, so always check real ingredient labels. About <b>${fmt(all)} kcal</b> and ${r1(allP)} g protein. Tap Log to add a meal to that slot today.</div>${meals.join('')}</section>
-  <section class="panel"><div class="ptitle"><span>Mass shake</span></div><div class="rt sm">1,148 kcal · 83 g protein · peanut-free</div><div class="note">${esc(H.MASS_SHAKE_NOTE)}</div>
-    <div class="note">Contains milk and whey, so it isn't part of your acne-conscious trial. Sunflower seed butter: check the label for tree-nut cross-contact.</div>
+  ${bulking ? `<section class="panel"><div class="ptitle"><span>Sample bulking day</span></div><div class="note" style="margin-top:0">Built without peanut or tree-nut ingredients. Packaged foods can still carry cross-contact risk, so check each label against your allergy plan. About <b>${fmt(all)} kcal</b> and ${r1(allP)} g protein. Tap Log to add a meal to that slot today.</div>${meals.join('')}</section>
+  <section class="panel"><div class="ptitle"><span>Mass shake</span></div><div class="rt sm">1,148 kcal · 83 g protein. No peanut or tree-nut ingredients in this recipe. Seed butters are often made on shared equipment, so check the jar against your allergy plan.</div><div class="note">${esc(H.MASS_SHAKE_NOTE)}</div>
+    <div class="note">Contains milk and whey, so it isn't part of your acne-conscious trial.</div>
     <button class="btn ghost full mt" data-act="food.saveshake">Save to My Meals</button></section>
   <section class="panel"><div class="ptitle"><span>Hard-gainer tips</span></div>
     <p class="para">• <b>Drink calories.</b> Whole milk and the mass shake are the easiest wins when you're not hungry.</p>

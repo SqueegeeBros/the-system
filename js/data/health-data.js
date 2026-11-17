@@ -133,6 +133,8 @@ export const LABS = [
 ];
 
 /* ---------- Foods (per serving) ---------- */
+// Intrinsic allergen tags for built-in foods, so a badge shows even if the allergy list changes.
+export const ALLERGEN_TAGS = { almonds: 'tree nut' };
 export const FOODS = [
   ['chicken', 'Chicken breast, cooked', '6 oz', 280, 53, 0, 6], ['beef90', 'Ground beef 90/10, cooked', '6 oz', 360, 44, 0, 20],
   ['beef80', 'Ground beef 80/20, cooked', '6 oz', 460, 41, 0, 32], ['sirloin', 'Sirloin steak, cooked', '6 oz', 350, 52, 0, 14],
@@ -154,10 +156,10 @@ export const FOODS = [
   ['honey', 'Honey', '1 tbsp', 64, 0, 17, 0], ['almonds', 'Almonds', '1 oz', 164, 6, 6, 14],
   ['olive', 'Olive oil', '1 tbsp', 119, 0, 0, 13.5], ['butter', 'Butter', '1 tbsp', 102, 0.1, 0, 11.5],
   ['avocado', 'Avocado', '½ fruit', 120, 1.5, 6, 11], ['broccoli', 'Broccoli', '1 cup', 31, 2.5, 6, 0.3],
-  ['sunbutter', 'Sunflower seed butter (peanut-free)', '2 tbsp', 200, 7, 7, 17],
-  ['massshake', 'Mass shake (peanut-free)', '1 shake', 1148, 83, 118, 42],
-].map(([id, n, sv, kcal, p, c, f]) => ({ id, n, sv, kcal, p, c, f }));
-export const MASS_SHAKE_NOTE = '2 cups whole milk · 2 scoops whey · 1 cup oats · 1 banana · 2 tbsp sunflower seed butter (peanut-free). Blend.';
+  ['sunbutter', 'Sunflower seed butter', '2 tbsp', 200, 7, 7, 17],
+  ['massshake', 'Mass shake', '1 shake', 1148, 83, 118, 42],
+].map(([id, n, sv, kcal, p, c, f]) => ({ id, n, sv, kcal, p, c, f, ...(ALLERGEN_TAGS[id] ? { allergen: ALLERGEN_TAGS[id] } : {}) }));
+export const MASS_SHAKE_NOTE = '2 cups whole milk · 2 scoops whey · 1 cup oats · 1 banana · 2 tbsp sunflower seed butter. Blend.';
 
 export const MEAL_SLOTS = [['b', 'Breakfast'], ['pre', 'Pre-workout'], ['post', 'Post-workout'], ['l', 'Lunch'], ['d', 'Dinner'], ['s', 'Snacks & pre-bed']];
 export const TAG_TO_SLOT = { 'Breakfast': 'b', 'Pre-gym': 'pre', 'Post-gym': 'post', 'Lunch': 'l', 'Dinner': 'd' };
@@ -168,7 +170,7 @@ export const SAMPLE_DAY = [
   { meal: 'b', items: [['oats', 1], ['greek', 1], ['blueberry', 1], ['honey', 1], ['whey', 1]] },
   { meal: 'l', items: [['beef90', 1], ['rice', 2], ['broccoli', 1]] },
   { meal: 'd', items: [['chicken', 1], ['potato', 1], ['butter', 1], ['avocado', 1]] },
-  { meal: 's', items: [['cottage', 1], ['honey', 1], ['almonds', 1]] },
+  { meal: 's', items: [['cottage', 1], ['honey', 1], ['blueberry', 1]] },
 ];
 
 /* ---------- News ---------- */

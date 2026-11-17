@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -269,6 +269,43 @@ window.addEventListener('pagehide', () => { flush(); flushFace(); });
     S.shopping.checked = {};
     S.migr.meals2 = true; save();
     toast(`Meals updated to your Sunday prep plan${removed.length ? ` · ${removed.length} other meal${removed.length > 1 ? 's' : ''} removed (restore in Fuel → Meals)` : ''}`);
+  }
+  // One-time (v19): the approved "mix" plan (Option A breakfast and add-on, Option B lunch and dinner).
+  // Values are computed from USDA SR Legacy averages, not your labels. Previous plan meals are archived, never deleted;
+  // plan meals you edited yourself are kept (and taken off this week's prep so the list doesn't double).
+  if (!S.migr.meals3) {
+    const P = (size, label, ceil = true) => ({ size, label, ceil });
+    const OIL = P(690, 'bottle (750 ml)'), I = (item, qty, unit = '', pkg) => ({ item, qty, unit, ...(pkg ? { pkg } : {}) });
+    const SRC = 'Values from USDA averages (your brands will differ; enter label values to replace them).';
+    const M = (id, name, tag, kcal, p, c, f, servings, batches, ingredients, note) => ({ id, name, tag, kcal, p, c, f, servings, ingredients, pinned: true, estimate: true, planTemplate: true, plan: 'mix-v19', note, prep: { on: true, batches } });
+    const PLAN = [
+      M('plan3_breakfast', 'Breakfast: eggs, oats, banana', 'Breakfast', 814, 37, 83, 38, 1, 7,
+        [I('Eggs, large', 4, '', P(12, 'dozen')), I('Rolled oats (dry weight)', 80, 'g', P(1190, 'canister (42 oz)')), I('Banana', 1), I('Olive oil', 13.5, 'g', OIL), I('Cinnamon', 0)],
+        `Per plate: 4 eggs cooked in 1 tbsp oil, 80 g dry oats, 1 banana. No sausage (log it separately if you have it). ${SRC}`),
+      M('plan3_pre', 'Pre-workout: banana + 2 rice cakes', 'Pre-gym', 175, 3, 42, 1, 1, 7,
+        [I('Banana', 1), I('Plain rice cakes', 2, '', P(14, 'pack (~14 cakes)'))], `Training fuel. ${SRC}`),
+      M('plan3_lunch', 'Lunch: chicken thigh, barley-rice & bean bowl', 'Lunch', 1083, 54, 140, 34, 7, 1,
+        [I('Chicken thighs, boneless skinless (raw weight)', 1050, 'g', P(453.6, 'lb', false)), I('Pearled barley (dry weight)', 420, 'g', P(454, 'bag (1 lb)')), I('Parboiled rice (dry weight)', 420, 'g', P(907, 'bag (2 lb)')),
+         I('Black beans, canned (drained weight)', 1050, 'g', P(240, 'can (15 oz)')), I('Frozen mixed vegetables', 1050, 'g', P(454, 'bag (16 oz)')), I('Olive oil', 175, 'g', OIL), I('Garlic, cumin, paprika, lemon', 0)],
+        `Batch of 7 bowls. Per bowl: 150 g raw chicken thigh, 60 g dry barley + 60 g dry parboiled rice, 150 g drained beans, 150 g veg, 25 g oil. Cook chicken to 165°F. Fridge 3 bowls, freeze 4. ${SRC}`),
+      M('plan3_dinner', 'Dinner: lentil-tomato whole-wheat pasta', 'Dinner', 1008, 43, 166, 26, 7, 1,
+        [I('Whole-wheat pasta (dry weight)', 980, 'g', P(375, 'box (13.25 oz)')), I('Dry lentils', 490, 'g', P(454, 'bag (1 lb)')), I('Crushed tomatoes, no salt added', 1400, 'g', P(794, 'can (28 oz)')),
+         I('Frozen spinach', 680, 'g', P(340, 'bag (12 oz)')), I('Olive oil', 140, 'g', OIL), I('Garlic, oregano, pepper', 0)],
+        `Batch of 7 bowls. Per bowl: 140 g dry pasta (cook al dente), 70 g dry lentils, 200 g tomatoes, about 100 g spinach, 20 g oil. Fridge 3, freeze 4; reheat to 165°F. ${SRC}`),
+      M('plan3_addon', 'Add-on: whole-wheat bread + olive oil', 'Snack', 285, 8, 28, 16, 1, 7,
+        [I('Whole-wheat bread (slices)', 2, '', P(20, 'loaf (~20 slices)')), I('Olive oil', 14, 'g', OIL)],
+        `Between jobs. Skip it on days you're already at your target. ${SRC}`),
+    ];
+    const oldPlan = S.meals.filter(m => m.planTemplate && m.plan !== 'mix-v19');
+    const keepEdited = oldPlan.filter(m => m.estimate === false);
+    const archived = oldPlan.filter(m => m.estimate !== false);
+    keepEdited.forEach(m => { if (m.prep) m.prep.on = false; });
+    S.meals = [...PLAN.filter(p => !S.meals.some(x => x.id === p.id)), ...S.meals.filter(m => !archived.includes(m))];
+    if (archived.length) S.mealsArchive = { at: Date.now(), meals: [...(S.mealsArchive?.meals || []), ...archived] };
+    S.settings.planRange = { lo: 3250, hi: 3450 };
+    S.shopping.checked = {};
+    S.migr.meals3 = true; save();
+    toast(`Meal plan updated: about 3,364 kcal and 145 g protein a day${archived.length ? ` · ${archived.length} previous plan meal${archived.length > 1 ? 's' : ''} archived (restore in Fuel → Meals)` : ''}${keepEdited.length ? ' · meals you edited were kept' : ''}`);
   }
   let introShown = false;
   if (!S.migr.swapPP && S.profile.name === 'Nathan') {

@@ -953,3 +953,8 @@ details.hcard-more summary::-webkit-details-marker{display:none}
 .hcard-macros b{font:700 1.2rem var(--h)}.hcard-macros i{font-style:normal;font-size:.6rem;color:var(--dim)}
 .hcard-fine{font-size:.66rem;line-height:1.45;color:var(--dim);margin-top:10px}
 .bc-acts .btn{flex:1}
+/* Compact barcode camera inside the sheet; sheets can be swiped down to close */
+.scanbox.compact{aspect-ratio:auto;height:min(34vh,230px)}
+.sheet-card{will-change:transform}
+.sheet-head{cursor:grab;touch-action:none}
+.sheet .hcard-fine{display:none}

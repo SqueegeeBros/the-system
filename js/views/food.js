@@ -349,8 +349,8 @@ function bcStartLive() {
 reg('food.barcode', () => {
   const live = BC.canScan();
   sheet('Scan food', `
-    ${live ? `<div class="scanbox"><video id="bc-video" playsinline muted></video><div class="scanline"></div></div>
-      <div class="note" id="bc-hint">Point the camera at the barcode. You'll see how healthy it is before you log anything.</div>` : `<div class="note">Live scanning isn’t available in this browser. Type the number under the barcode.</div>`}
+    ${live ? `<div class="scanbox compact"><video id="bc-video" playsinline muted></video><div class="scanline"></div></div>
+      <div class="note" id="bc-hint">Point at the barcode. Swipe down to close.</div>` : `<div class="note">Live scanning isn’t available in this browser. Type the number under the barcode.</div>`}
     <div class="inline mt" id="bc-entry"><input id="bc-code" inputmode="numeric" placeholder="Barcode number" autocomplete="off"><button class="btn" data-act="food.bclookup">Check</button></div>
     <div id="bc-result"></div>`, {
     onMount: () => bcStartLive(),

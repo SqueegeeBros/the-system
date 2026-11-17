@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -20,6 +20,7 @@ import { autoBackup } from './backup.js';
 import * as Sync from './sync.js';
 import { migrateLegacyPhotos } from './files.js';
 import { loadFace, flushFace } from './face/store.js';
+import { stopScanner } from './views/scan.js';
 
 // If Chrome renders in "Desktop site" mode on a phone (page ~980px wide on a ~360px screen),
 // scale the app back up so it looks like a phone app again.
@@ -48,6 +49,7 @@ nav.render = () => {
   const y = window.scrollY;
   applyDisplay();
   const key = [nav.tab, nav.sub.health, nav.sub.face, nav.sub.food].join('|');
+  if (!(nav.tab === 'health' && nav.sub.health === 'scan')) stopScanner();
   if (key !== lastViewKey) { main.classList.remove('enter'); void main.offsetWidth; main.classList.add('enter'); lastViewKey = key; }
   main.innerHTML = v.render();
   v.mount?.(main);

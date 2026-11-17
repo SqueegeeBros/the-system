@@ -876,3 +876,40 @@ nav button.on::after{opacity:1;transform:none}
 .fx svg.fx-chart .fx-cg{stroke:#1d1d20;stroke-width:1}
 .fx svg.fx-chart .fx-ev.stop{stroke:var(--acc2);stroke-width:1.2}
 .fx-facemap svg text{stroke:none}
+
+/* =========================================================
+   Food scanner (Health → Food scanner)
+   ========================================================= */
+.sc-box{aspect-ratio:4/3}
+.sc-box .scanline{opacity:0;transition:opacity .3s}
+.sc-box.on .scanline{opacity:1;animation:scanmove 1.8s ease-in-out infinite}
+@keyframes scanmove{0%,100%{top:28%}50%{top:72%}}
+.sc-start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:radial-gradient(70% 60% at 50% 50%,rgba(226,196,138,.10),rgba(0,0,0,.82));color:var(--text);font:700 1.05rem var(--h);letter-spacing:.12em;text-transform:uppercase}
+.sc-start svg{width:42px;height:42px;color:var(--acc1)}
+.center{text-align:center}
+.sc-result{border-radius:22px;padding:18px 16px 16px;border:1px solid var(--line);background:linear-gradient(180deg,#111113,#0d0d0e 60%);position:relative;overflow:hidden;animation:fxIn .4s cubic-bezier(.2,.8,.2,1) both}
+.sc-result::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:var(--tc,#3a3a3e)}
+.sc-result.good{--tc:#7fb88a}.sc-result.ok{--tc:var(--acc1)}.sc-result.limit{--tc:#e08a6b}.sc-result.stop{--tc:var(--red)}.sc-result.unknown{--tc:#55555b}
+.sc-top{display:flex;gap:12px;align-items:center}
+.sc-img{width:56px;height:56px;object-fit:contain;border-radius:12px;background:#fff;flex:0 0 56px}
+.sc-name{font:700 1.45rem/1.05 var(--h);text-transform:uppercase;letter-spacing:.02em;margin-top:4px}
+.sc-verdict{margin:16px 0 4px;padding:14px;border-radius:16px;background:color-mix(in srgb,var(--tc) 12%,transparent);border:1px solid color-mix(in srgb,var(--tc) 40%,transparent)}
+.sc-verdict b{display:block;font:800 1.9rem/1 var(--h);text-transform:uppercase;letter-spacing:.02em;color:var(--tc)}
+.sc-verdict span{display:block;font-size:.84rem;color:#d6d6da;margin-top:6px}
+.sc-reasons{list-style:none;display:flex;flex-direction:column;margin-top:10px}
+.sc-reasons li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line);font-size:.84rem;line-height:1.45}
+.sc-reasons li:first-child{border-top:0}
+.sc-reasons svg{width:16px;height:16px;flex:0 0 16px;margin-top:2px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sc-reasons li.pos svg{color:#7fb88a}.sc-reasons li.neg svg{color:#e08a6b}.sc-reasons li.neu svg{color:var(--dim)}
+.sc-macros{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:14px;border-radius:14px;overflow:hidden;background:var(--line);border:1px solid var(--line)}
+.sc-macros div{background:#101012;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.sc-macros span{font:600 .56rem var(--b);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:center}
+.sc-macros b{font:700 1.3rem var(--h)}
+.sc-macros i{font-style:normal;font-size:.62rem;color:var(--dim)}
+.sc-hist{width:100%;display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);text-align:left;color:var(--text)}
+.fx-head+.sc-hist{border-top:0}
+.sc-dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px;background:#55555b}
+.sc-dot.good{background:#7fb88a}.sc-dot.ok{background:var(--acc1)}.sc-dot.limit{background:#e08a6b}.sc-dot.stop{background:var(--red)}
+.sc-chip{display:flex;align-items:center;gap:8px;margin-top:10px;padding:9px 12px;border-radius:12px;background:var(--card2);border:1px solid var(--line2);font-size:.78rem;color:var(--muted)}
+.sc-chip b{color:var(--text)}
+.fx .sc-start svg,.fx-tt svg{fill:none;stroke:currentColor}

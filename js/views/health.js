@@ -9,6 +9,7 @@ import * as H from '../data/health-data.js';
 import * as F from '../files.js';
 import * as Body from './body.js';
 import * as Face from './face.js';
+import * as Scan from './scan.js';
 
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const norm = s => String(s || '').trim().toLowerCase();
@@ -46,11 +47,12 @@ const HI = {
   photos: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   visit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
   emergency: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M12 9v6M9 12h6"/>',
+  scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 8v8M11 8v8M14 8v8M17 8v8"/>',
   news: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
 };
 export const hicon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${HI[k] || ''}</svg>`;
 const TILES = [
-  ['face', 'Face', 'Skin, weekly photos, routine'], ['training', 'Training', 'Sets, split, progress, history'],
+  ['face', 'Face', 'Skin, weekly photos, routine'], ['scan', 'Food scanner', 'Scan a barcode: good pick or not'], ['training', 'Training', 'Sets, split, progress, history'],
   ['pills', 'Pills & meds', 'Morning · pre-workout · night'], ['body', 'Weight & size', 'Weigh-ins, tape measurements'],
   ['dexa', 'DEXA scans', 'Upload scans, lean vs fat'], ['labs', 'Lab results', 'Bloodwork with flags'],
   ['records', 'Records', 'Photos & PDFs of reports'], ['symptoms', 'Symptoms', 'Log how you feel'],
@@ -61,11 +63,12 @@ const TILES = [
 
 const SUB = {};
 SUB.face = () => Face.render();
+SUB.scan = () => Scan.render();
 export function render() {
   const v = nav.sub.health;
   return `<div class="wrap">${v && SUB[v] ? `${v === 'face' ? '' : '<button class="linkbtn back" data-act="h.back">‹ Health</button>'}${SUB[v]()}` : hub()}</div>`;
 }
-export function mount(root) { F.hydrate(root); if (nav.sub.health === 'news') maybeRefreshNews(); if (nav.sub.health === 'face') Face.mount(root); }
+export function mount(root) { F.hydrate(root); if (nav.sub.health === 'news') maybeRefreshNews(); if (nav.sub.health === 'face') Face.mount(root); if (nav.sub.health === 'scan') Scan.mount(root); else Scan.stopScanner(); }
 
 /* ================= HUB ================= */
 function hub() {

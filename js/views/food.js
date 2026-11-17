@@ -366,9 +366,11 @@ async function bcLookup(code) {
     return;
   }
   const useServ = !!product.perServing;
+  const hc = BC.healthCheck(product, S.settings.allergens); product.flag = hc.allergen || null;
   const wasPeanut = (product.peanut && peanutOn()) || allergenHit(product.name);
   out.innerHTML = `
-    ${wasPeanut ? `<div class="alert">This product lists <b>peanut</b> (or traces).</div>` : ''}
+    ${hc.tier === 'stop' ? `<div class="alert">${esc(hc.sub)}</div>` : wasPeanut ? `<div class="alert">This product lists <b>peanut</b> (or traces).</div>` : ''}
+    ${hc.tier !== 'stop' ? `<div class="sc-chip ${hc.tier}"><i class="sc-dot ${hc.tier}"></i><span>Health check: <b>${esc(hc.title)}</b>${hc.reasons[0] ? ` · ${esc((hc.reasons.find(r => r.s < 0) || hc.reasons[hc.reasons.length - 1]).t)}` : ''}</span></div>` : ''}
     <div class="rt mt">${esc(product.name)}</div><div class="rs">${esc(product.brand)}${product.servingSize ? ` · serving ${esc(product.servingSize)}` : ''}</div>
     <div class="amtchips">${bcChips(useServ).map(([v, l]) => `<button class="amtchip${l === (useServ ? '1' : '') ? ' on' : ''}" data-bcv="${v}">${l}</button>`).join('')}</div>
     <div class="inline">
@@ -401,7 +403,7 @@ function bcMacros() {
 }
 const bcName = () => { const amt = num($('#bc-amt').value); return `${product.name}${product.perServing ? (amt !== 1 ? ` ×${r1(amt)}` : '') : ` (${r1(amt)} g)`}`; };
 reg('food.bclog', async () => {
-  const useServ = !!product.perServing, flag = product.peanut ? 'peanut' : allergenHit(product.name);
+  const useServ = !!product.perServing, flag = product.flag || (product.peanut ? 'peanut' : allergenHit(product.name));
   const base = product.perServing || product.per100;
   const entry = { name: product.name, base: { kcal: base.kcal, p: base.p, c: base.c, f: base.f }, mode: useServ ? 'serving' : 'gram',
     amount: num($('#bc-amt').value), container: bcContainer(useServ), servingG: product.servingG, src: 'barcode' };

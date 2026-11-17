@@ -1,6 +1,6 @@
-// Shared scan card (v19): Today → Barcode and Health → Food scanner.
-// Order: allergy panel → product and match check → data warnings → amount → nutrition for that amount → source.
-// No overall score: each dimension is shown on its own, with its basis. Nothing here says a food is "safe".
+// Shared scan card: Today → Barcode and Health → Food scanner.
+// Glance: allergy strip (if any) → 1–100 score ring in green-to-red → one word. Everything else sits under "Details".
+// An allergy match always replaces the score. Nothing here says a food is "safe".
 import { S } from './state.js';
 import { esc, fmt, r1, num } from './util.js';
 import { quality } from './barcode.js';
@@ -67,21 +67,38 @@ export function nutritionHtml(p, amt) {
     <p class="sc2-fine">% DV uses FDA Daily Values (2,300 mg sodium, 50 g added sugars) for a 2,000-kcal reference diet: 5% or less is low, 20% or more is high. It's a yardstick for this amount, not your personal target.${p.nova ? ' Processing groups (NOVA) are shown for information; experts often disagree on them.' : ''}</p>`;
 }
 
-export function scanCard(p, a, { amount } = {}) {
+const STRIP = {
+  A: a => a.title, B: a => `${a.title} · check the package`, D: () => 'Not enough information to check allergens · read the package',
+};
+const reasonLi = r => `<li class="${r.s > 0 ? 'pos' : r.s < 0 ? 'neg' : 'neu'}"><span>${esc(r.t)}</span>${r.s ? `<em>${r.s > 0 ? '+' : ''}${r.s}</em>` : ''}</li>`;
+
+// Glance first (allergy strip + score ring + one word), everything else folded under "Details".
+export function scanCard(p, a, sc, { amount } = {}) {
   const serv = useServ(p), amt = amount ?? (serv ? 1 : p.servingG || 100);
   const warn = quality(p);
   const date = p.modified ? new Date(p.modified).toISOString().slice(0, 10) : null;
   const per = p.perServing && p.servingSize ? `Label serving: ${esc(p.servingSize)}` : p.perServing ? 'Per serving' : 'Values per 100 g';
+  const blocked = a.state === 'A', score = blocked ? null : sc?.score ?? null;
+  const color = blocked ? '#e5484d' : sc?.color || '#6b6b72';
+  const word = blocked ? 'Not for you' : sc?.label || 'Not enough data';
   return `<div class="sc2">
-    ${allergyPanel(a)}
-    <section class="sc2-prod">${p.image ? `<img src="${esc(p.image)}" alt="" referrerpolicy="no-referrer">` : ''}<div><b>${esc(p.name)}</b><span>${esc([p.brand, p.packageLabel].filter(Boolean).join(' · '))}</span>
-      <small>Exact barcode match · Open Food Facts</small></div></section>
-    <div class="sc2-match" id="sc2-match"><span>Does this match your package?</span><div class="sc2-yn"><button class="btn ghost sm" data-sc2="yes">Yes</button><button class="btn ghost sm" data-sc2="no">No</button></div></div>
-    ${warn.map(w => `<div class="sc2-warn">${esc(w)}</div>`).join('')}
-    ${baseOf(p) ? `<div class="sc2-amt"><div class="amtchips">${amountChips(p).map(([v, l]) => `<button class="amtchip${v === amt ? ' on' : ''}" data-sc2v="${v}">${l}</button>`).join('')}</div>
-      <label class="field"><span>${serv ? 'Servings eaten' : 'Grams eaten'} · ${per}</span><input id="sc2-amt" type="number" inputmode="decimal" value="${amt}" step="${serv ? 0.25 : 5}"></label></div>` : ''}
-    <div id="sc2-nut">${nutritionHtml(p, amt)}</div>
-    <p class="sc2-src">Source: Open Food Facts (crowd-sourced)${date ? `, last edited ${date}` : ''}. Not checked against your package.</p>
+    ${a.state !== 'C' ? `<div class="sc3-strip s${a.state}">${ICON[a.state]}<span>${esc(STRIP[a.state](a))}</span></div>` : ''}
+    <section class="sc3-glance" style="--c:${color}">
+      <div class="sc3-ring${score == null ? ' na' : ''}" style="--p:${score ?? 0}"><b>${blocked ? '!' : score ?? '?'}</b></div>
+      <div class="sc3-t"><b>${esc(word)}</b><span>${esc(p.name)}</span>${a.state === 'C' ? '<small>No peanut or tree nut listed in this entry · check the package</small>' : ''}${warn.length ? '<small class="w">Database entry may be off · see details</small>' : ''}</div>
+    </section>
+    <details class="sc3-more"><summary>Details</summary>
+      ${allergyPanel(a)}
+      <section class="sc2-prod">${p.image ? `<img src="${esc(p.image)}" alt="" referrerpolicy="no-referrer">` : ''}<div><b>${esc(p.name)}</b><span>${esc([p.brand, p.packageLabel].filter(Boolean).join(' · '))}</span>
+        <small>Exact barcode match · Open Food Facts</small></div></section>
+      <div class="sc2-match" id="sc2-match"><span>Does this match your package?</span><div class="sc2-yn"><button class="btn ghost sm" data-sc2="yes">Yes</button><button class="btn ghost sm" data-sc2="no">No</button></div></div>
+      ${warn.map(w => `<div class="sc2-warn">${esc(w)}</div>`).join('')}
+      ${baseOf(p) ? `<div class="sc2-amt"><div class="amtchips">${amountChips(p).map(([v, l]) => `<button class="amtchip${v === amt ? ' on' : ''}" data-sc2v="${v}">${l}</button>`).join('')}</div>
+        <label class="field"><span>${serv ? 'Servings eaten' : 'Grams eaten'} · ${per}</span><input id="sc2-amt" type="number" inputmode="decimal" value="${amt}" step="${serv ? 0.25 : 5}"></label></div>` : ''}
+      <div id="sc2-nut">${nutritionHtml(p, amt)}</div>
+      ${!blocked && sc?.reasons?.length ? `<div class="sc3-why"><span class="sc2-eyebrow">Why ${score}</span><ul>${sc.reasons.map(reasonLi).join('')}</ul></div>` : ''}
+      <p class="sc2-src">Source: Open Food Facts (crowd-sourced)${date ? `, last edited ${date}` : ''}. Not checked against your package. The score is a whole-foods weighting built for this app, not a validated health measure; it ignores portion size, and the allergy check always overrides it.</p>
+    </details>
   </div>`;
 }
 

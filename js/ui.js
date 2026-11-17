@@ -72,7 +72,6 @@ function dragToClose(card, body) {
       else if (d < -6) { y0 = null; return; } else return;
     }
     dy = Math.max(0, d); card.style.transform = `translateY(${dy}px)`;
-    if (e.cancelable) e.preventDefault();
   };
   const end = () => {
     if (y0 == null) return; y0 = null; if (!active) return; active = false;
@@ -83,7 +82,7 @@ function dragToClose(card, body) {
   };
   if ('ontouchstart' in window) {
     card.addEventListener('touchstart', start, { passive: true });
-    card.addEventListener('touchmove', move, { passive: false });
+    card.addEventListener('touchmove', move, { passive: true });   // passive: the phone's own scrolling is never held up
     card.addEventListener('touchend', end); card.addEventListener('touchcancel', end);
   } else {
     card.addEventListener('pointerdown', start);

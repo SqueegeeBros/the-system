@@ -45,6 +45,15 @@ t('no banned reassurance phrases in UI text', () => {
         assert.fail(`${f}: "${m[0]}" in …${ctx}…`); } } }
 });
 
+
+// --- glance score ---
+const oats = prod({ ingredients: 'Whole grain rolled oats', nova: 1, nutri: 'a', per100: { kcal: 379, p: 13, c: 68, f: 6.5, sugar: 1, fiber: 10, satfat: 1.1 }, salt100: 0.01 });
+const wafers = prod({ ingredients: 'Sugar, wheat flour, soybean oil, whey, eggs', nova: 4, nutri: 'e', per100: { kcal: 467, p: 4, c: 73, f: 17, sugar: 37, fiber: 1, satfat: 4.5 }, salt100: 0.8 });
+t('oats score green (85+)', () => { const s = BC.scoreFood(oats); assert.ok(s.score >= 85, s.score); assert.equal(s.color, '#2fb35a'); });
+t('ultra-processed wafers score in the red', () => { const s = BC.scoreFood(wafers); assert.ok(s.score < 30, s.score); assert.equal(s.color, '#e5484d'); });
+t('no data -> no score', () => assert.equal(BC.scoreFood(prod({ per100: { kcal: 400, p: 10, c: 60, f: 14 } })).score, null));
+t('precautionary text does not count as ingredients for the score', () => assert.equal(BC.scoreFood(prod({ ingredients: 'Whole grain rolled oats. May contain peanuts, tree nuts, soy, milk and wheat.', nova: 1, per100: { kcal: 379, p: 13, c: 68, f: 6.5, sugar: 1 } })).score >= 85, true));
+
 // --- data quality ---
 t('stale entry warning', () => assert.equal(BC.quality({ modified: Date.now() - 400 * 864e5 }).length, 1));
 t('kcal mismatch warning', () => assert.match(BC.quality({ per100: { kcal: 500, p: 10, c: 10, f: 5 } })[0], /don’t add up/));

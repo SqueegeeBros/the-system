@@ -383,10 +383,11 @@ async function bcLookup(code) {
     return;
   }
   bcAllergy = BC.allergyCheck(product, S.settings.allergens);
-  BC.remember(product, bcAllergy);
+  const bcScore = BC.scoreFood(product);
+  BC.remember(product, bcAllergy, bcScore);
   $('#bc-entry').hidden = true;
   const canLog = !!(product.perServing || product.per100);
-  out.innerHTML = `${scanCard(product, bcAllergy)}
+  out.innerHTML = `${scanCard(product, bcAllergy, bcScore)}
     <div class="btnrow mt bc-acts"><button class="btn ghost" data-act="food.bcdelete">Delete</button>${canLog ? `<button class="btn${bcAllergy.state === 'A' ? ' danger' : ''}" data-act="food.bclog">${BC.LOG_LABEL[bcAllergy.state]}</button>` : `<button class="btn" data-act="food.manual">Enter from label</button>`}</div>
     ${canLog ? '<button class="linkbtn mt" data-act="food.bcsave" style="width:100%;text-align:center">Save as a meal instead</button>' : ''}`;
   bcAmount = wireScanCard(out, product, { onWrong: () => ACT['food.manual']() });

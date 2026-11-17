@@ -1,4 +1,4 @@
-// FOOD SCANNER (Health → Food scanner): scan a barcode, see allergy status first, then plain nutrition facts.
+// FOOD SCANNER (Health → Food scanner): scan a barcode, see allergy status and a glance score; details fold away.
 // Data comes from Open Food Facts (crowd-sourced) plus your allergy list. Nothing is logged unless you tap Log.
 import { S, save } from '../state.js';
 import { $, esc } from '../util.js';
@@ -8,7 +8,7 @@ import * as BC from '../barcode.js';
 import { logEntry, scanLogConfirm } from './food.js';
 import { scanCard, wireScanCard, allergyPanel, containerAmount } from '../healthcard.js';
 
-let stop = null, product = null, allergy = null, state = 'idle', err = '', getAmount = null;
+let stop = null, product = null, allergy = null, score = null, state = 'idle', err = '', getAmount = null;
 export const stopScanner = () => { stop?.(); stop = null; };
 document.addEventListener('visibilitychange', () => { if (document.hidden && stop) { stopScanner(); state = 'idle'; if (nav.sub.health === 'scan') rerender(); } });
 window.addEventListener('popstate', () => { if (nav.sub.health !== 'scan') stopScanner(); });
@@ -27,13 +27,13 @@ function resultCard() {
     <div class="btnrow mt"><button class="btn ghost" data-act="scan.again">Scan another</button><button class="btn" data-act="food.manual">Enter from label</button></div></section>`;
   if (state !== 'done' || !product) return '';
   const canLog = !!(product.perServing || product.per100);
-  return `<section class="fx-card" id="sc-result">${scanCard(product, allergy)}
+  return `<section class="fx-card" id="sc-result">${scanCard(product, allergy, score)}
     <div class="btnrow mt"><button class="btn ghost" data-act="scan.again">Scan another</button>${canLog ? `<button class="btn${allergy.state === 'A' ? ' danger' : ''}" data-act="scan.log">${BC.LOG_LABEL[allergy.state]}</button>` : `<button class="btn" data-act="food.manual">Enter from label</button>`}</div></section>`;
 }
 export function render() {
   const live = BC.canScan(), h = hist().slice(0, 8);
   return `<div class="fx">
-  <header class="fx-title"><span class="fx-eyebrow">Health</span><h1>Food scanner</h1><p>Allergy check first, then the nutrition facts for the amount you eat. A scan can flag an allergen; it can’t confirm a food is free of one.</p></header>
+  <header class="fx-title"><span class="fx-eyebrow">Health</span><h1>Food scanner</h1><p>Glance score from 1 to 100, green to red. Tap Details for the rest. An allergy match always overrides the score.</p></header>
   <section class="fx-card sc-cam">
     ${live ? `<div class="scanbox sc-box${state === 'scanning' ? ' on' : ''}"><video id="sc-video" playsinline muted></video><div class="scanline"></div>
       ${state !== 'scanning' ? `<button class="sc-start" data-act="scan.start">${ICO.scan}<span>${state === 'done' || state === 'missing' ? 'Scan another' : 'Start scanning'}</span></button>` : ''}</div>
@@ -43,7 +43,7 @@ export function render() {
   </section>
   ${resultCard()}
   ${h.length ? `<section class="fx-card"><header class="fx-head"><h2>Recent scans</h2><button class="fx-link" data-act="scan.clear">Clear all</button></header>
-    ${h.map(x => { const st = BC.histState(x); return `<div class="sc-histrow"><button class="sc-hist" data-act="scan.recheck" data-code="${esc(x.code)}"><i class="sc-dot ${DOT[st]}"></i><span class="fx-tt"><b>${esc(x.name)}</b><small>${esc(x.state ? x.title : 'Scanned before v19 — tap to recheck')}${x.brand ? ' · ' + esc(x.brand) : ''}</small></span></button><button class="sc-del" data-act="scan.forget" data-code="${esc(x.code)}" aria-label="Delete scan">${ICO.x}</button></div>`; }).join('')}</section>` : ''}
+    ${h.map(x => { const st = BC.histState(x), bd = BC.band(x.score); return `<div class="sc-histrow"><button class="sc-hist" data-act="scan.recheck" data-code="${esc(x.code)}"><i class="sc-dot ${st === 'A' ? 'sA' : ''}" style="${st !== 'A' && x.score != null ? `background:${bd.color}` : ''}"></i><span class="fx-tt"><b>${esc(x.name)}</b><small>${st === 'A' ? esc(x.title || 'Contains an allergen') : x.score != null ? `${x.score} · ${esc(bd.label)}` : 'No score'}${x.brand ? ' · ' + esc(x.brand) : ''}</small></span></button><button class="sc-del" data-act="scan.forget" data-code="${esc(x.code)}" aria-label="Delete scan">${ICO.x}</button></div>`; }).join('')}</section>` : ''}
   </div>`;
 }
 export async function mount(root) {
@@ -61,8 +61,8 @@ async function check_(code) {
   try { product = await BC.lookup(code); }
   catch (e) { state = 'error'; err = e.message || BC.OFFLINE_MSG; rerender(); return; }
   if (!product) { state = 'missing'; rerender(); return; }
-  allergy = BC.allergyCheck(product, S.settings.allergens);
-  BC.remember(product, allergy); state = 'done'; rerender(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  allergy = BC.allergyCheck(product, S.settings.allergens); score = BC.scoreFood(product);
+  BC.remember(product, allergy, score); state = 'done'; rerender(); window.scrollTo(0, 0);
 }
 reg('scan.start', () => { state = 'scanning'; product = null; rerender(); });
 reg('scan.again', () => { state = BC.canScan() ? 'scanning' : 'idle'; product = null; rerender(); });

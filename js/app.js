@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 20;
+const APP_VERSION = 21;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -32,7 +32,7 @@ fitPhone();
 window.addEventListener('resize', fitPhone);
 
 const VIEWS = { quests: Quests, food: Food, train: Train, work: Work, status: Status, settings: Settings, health: Health };
-const NAV_OF = { train: 'health', settings: 'status' };   // which bottom tab lights up
+const NAV_OF = { train: 'health', settings: 'status', work: 'quests' };   // which bottom tab lights up
 const main = $('#view');
 let lastViewKey = '';
 
@@ -118,7 +118,13 @@ Sync.onStatus(s => {
 });
 const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(false), ms))]);
 
-window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (VIEWS[t] && t !== nav.tab) go(t); });
+// Home-screen shortcuts: "#scan" opens the food scanner with the camera running; "#coach" opens the coach.
+function launchAction(t) {
+  if (t !== 'scan' && t !== 'coach') return;
+  history.replaceState(null, '', t === 'scan' ? '#food' : '#quests');
+  setTimeout(() => ACT[t === 'scan' ? 'food.barcode' : 'coach.open']?.(), 150);
+}
+window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t === 'scan' || t === 'coach') { if (t === 'scan') go('food'); launchAction(t); return; } if (VIEWS[t] && t !== nav.tab) go(t); });
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
     if (Sync.signedIn()) { const replaced = await withTimeout(Sync.pull(), 6000); if (replaced) toast('Synced from your other device'); }
@@ -140,8 +146,9 @@ window.addEventListener('pagehide', () => { flush(); flushFace(); });
   const reports = E.rollover();
   E.sync();
   const t = location.hash.slice(1);
-  nav.tab = VIEWS[t] ? t : 'quests';
+  nav.tab = VIEWS[t] ? t : t === 'scan' ? 'food' : 'quests';
   rerender();
+  launchAction(t);
   showPenalties(reports);
   if (!storageOK) notice({ title: 'Storage unavailable', html: '<div class="msg sm">This browser is blocking storage, so nothing will be saved after you close it. Open the app from its installed icon or a normal browser tab.</div>', btn: 'OK' });
   // One-time: load Nathan's Lower A sheet into an empty Lower template (and an empty Lower session in progress)
@@ -306,6 +313,15 @@ window.addEventListener('pagehide', () => { flush(); flushFace(); });
     S.shopping.checked = {};
     S.migr.meals3 = true; save();
     toast(`Meal plan updated: about 3,364 kcal and 145 g protein a day${archived.length ? ` · ${archived.length} previous plan meal${archived.length > 1 ? 's' : ''} archived (restore in Fuel → Meals)` : ''}${keepEdited.length ? ' · meals you edited were kept' : ''}`);
+  }
+  // One-time (v21): Nathan's Labcorp bloodwork collected 2026-11-12, entered at his request.
+  if (!S.migr.labs20261112) {
+    const d = '2026-11-12', V = { glu: 95, bun: 21, creat: 1.16, buncr: 18, na: 140, k: 4.9, cl: 102, co2: 21, ca: 10, tp: 7, alb: 4.8, glob: 2.2, bili: 0.7, alp: 205, ast: 25, alt: 26,
+      wbc: 7.3, rbc: 5.14, hgb: 15.4, hct: 47.2, mcv: 92, mch: 30, mchc: 32.6, rdw: 12.5, plt: 258, neutp: 54, lymp: 36, monop: 7, eosp: 2, basop: 1, igp: 0,
+      neut: 3.9, lym: 2.8, mono: 0.5, eos: 0.1, baso: 0.1, ig: 0, tsh: 1.54, ft4: 1.3, uric: 6.8, ldh: 189 };
+    S.health.labs = (S.health.labs || []).filter(x => !(x.d === d && x.m in V));
+    for (const [m, v] of Object.entries(V)) S.health.labs.push({ d, m, v });
+    S.migr.labs20261112 = true; save();
   }
   let introShown = false;
   if (!S.migr.swapPP && S.profile.name === 'Nathan') {

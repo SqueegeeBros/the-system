@@ -54,7 +54,7 @@ export const hicon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${HI[k] |
 const TILES = [
   ['face', 'Face', 'Skin, weekly photos, routine'], ['scan', 'Food scanner', 'Allergy check and nutrition facts'], ['training', 'Training', 'Sets, split, progress, history'],
   ['pills', 'Pills & meds', 'Morning · pre-workout · night'], ['body', 'Weight & size', 'Weigh-ins, tape measurements'],
-  ['dexa', 'DEXA scans', 'Upload scans, lean vs fat'], ['labs', 'Lab results', 'Bloodwork with flags'],
+  ['dexa', 'DEXA scans', 'Upload scans, lean vs fat'], ['labs', 'Bloodwork', 'Every result, flags first'],
   ['records', 'Records', 'Photos & PDFs of reports'], ['symptoms', 'Symptoms', 'Log how you feel'],
   ['vitals', 'Sleep & vitals', 'Sleep, HRV, heart rate, BP'], ['photos', 'Progress photos', 'Body photos, side by side'],
   ['visit', 'Doctor visit prep', 'One-page summary'], ['emergency', 'Emergency card', 'Allergies, meds, contact'],
@@ -71,21 +71,16 @@ export function render() {
 export function mount(root) { F.hydrate(root); if (nav.sub.health === 'news') maybeRefreshNews(); if (nav.sub.health === 'face') Face.mount(root); if (nav.sub.health === 'scan') Scan.mount(root); else Scan.stopScanner(); }
 
 /* ================= HUB ================= */
+// v21: simple hub. Training, the five things you actually use, and everything else folded under "More".
+const MAIN_TILES = ['training', 'scan', 'labs', 'body', 'face'];
 function hub() {
-  const k = dkey(), slot = currentSlot(), items = slotItems(slot), log = HS().stackLog[k] || {};
-  const ck = HS().checkins[k];
   const flagged = Body.latestLabs().filter(l => l.flag !== 'ok').length;
+  const tile = ([v, n, s]) => `<button class="htile" data-act="h.open" data-v="${v}"><span class="ic">${hicon(v)}</span><b>${n}</b><span>${s}</span></button>`;
   return `
-  <div class="inline"><input id="h-search" placeholder="Search your health history" aria-label="Search your health history"><button class="btn" data-act="h.search">Search</button></div>
   ${trainingPanel(true)}
-  <section class="panel"><div class="ptitle"><span>Recovery</span></div>${recoveryBody(ck, readiness(ck, k))}</section>
-  <section class="panel"><div class="ptitle"><span>${H.SLOTS[slot]} pills</span></div>
-    <div class="note" style="margin-top:-8px">${slotTime(slot)}</div>
-    <div class="qlist mt">${items.map(it => pillRow(it, log)).join('') || '<div class="empty">Nothing scheduled right now.</div>'}</div>
-    <button class="btn ghost full mt" data-act="h.open" data-v="pills">All pills & meds</button></section>
-  ${flagged ? `<button class="banner gold" data-act="h.open" data-v="labs">${flagged} lab value${flagged > 1 ? 's' : ''} outside the typical range · review</button>` : ''}
-  <div class="htiles">${TILES.map(([v, n, s]) => `<button class="htile${v === 'face' ? ' feat' : ''}" data-act="h.open" data-v="${v}"><span class="ic">${hicon(v)}</span><b>${n}</b><span>${s}</span></button>`).join('')}</div>
-  ${insights()}`;
+  ${flagged ? `<button class="banner gold" data-act="h.open" data-v="labs">${flagged} lab value${flagged > 1 ? 's' : ''} outside the range · review</button>` : ''}
+  <div class="htiles">${MAIN_TILES.map(v => TILES.find(t => t[0] === v)).filter(Boolean).map(tile).join('')}</div>
+  <details class="panel fold"><summary>More</summary><div class="htiles mt">${TILES.filter(t => !MAIN_TILES.includes(t[0])).map(tile).join('')}</div></details>`;
 }
 
 /* ================= TRAINING ================= */

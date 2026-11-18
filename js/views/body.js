@@ -168,16 +168,21 @@ export function latestLabs() {
 }
 const rangeTxt = L => L && (L.lo != null || L.hi != null) ? `typical ${L.lo != null && L.hi != null ? `${L.lo}–${L.hi}` : L.lo != null ? `${L.lo}+` : `under ${L.hi}`}` : '';
 function labsView() {
-  const latest = latestLabs();
-  return `<section class="panel"><div class="ptitle"><span>Lab results</span></div><button class="btn full big" data-act="body.addlab">+ Add lab results</button>
-    <div class="note">Also upload the PDF or a photo in Records so the original is always with you.</div></section>
-  <section class="panel"><div class="ptitle"><span>Latest values</span></div>${latest.length ? latest.map(l => `<button class="row btnrowitem" data-act="body.labhist" data-m="${l.m}"><div class="grow"><div class="rt sm">${esc(l.L?.n || l.m)}</div><div class="rs">${niceDate(l.d)}${rangeTxt(l.L) ? ' · ' + rangeTxt(l.L) : ''}</div></div><b>${r1(l.v)} <span class="rs">${l.L?.u || ''}</span></b><span class="badge ${l.flag === 'ok' ? '' : 'red'}">${l.flag === 'ok' ? 'OK' : l.flag.toUpperCase()}</span></button>`).join('')
-    : '<div class="empty">No results yet. A yearly panel with vitamin D, testosterone, lipids, ferritin and a metabolic panel is a smart baseline.</div>'}</section>
-  <div class="note center">Typical adult ranges. Your lab's report has the final say. Talk to your doctor about anything flagged.</div>`;
+  const latest = latestLabs(), flagged = latest.filter(l => l.flag !== 'ok');
+  const last = latest.map(l => l.d).sort().pop();
+  const row = l => `<button class="row btnrowitem" data-act="body.labhist" data-m="${l.m}"><div class="grow"><div class="rt sm">${esc(l.L?.n || l.m)}</div><div class="rs">${rangeTxt(l.L) || 'no set range'}</div></div><b>${r1(l.v)} <span class="rs">${l.L?.u || ''}</span></b><span class="badge ${l.flag === 'ok' ? '' : 'red'}">${l.flag === 'ok' ? 'OK' : l.flag.toUpperCase()}</span></button>`;
+  const groups = H.LAB_PANELS.map(p => [p, latest.filter(l => (l.L?.p || 'Other') === p).sort((a, b) => H.LABS.indexOf(a.L) - H.LABS.indexOf(b.L))]).filter(([, ls]) => ls.length);
+  return `<section class="panel"><div class="ptitle"><span>Bloodwork</span></div>
+    ${latest.length ? `<div class="bigline"><div><b>${latest.length - flagged.length}/${latest.length}</b><span> in range${last ? ` · ${niceDate(last)}` : ''}</span></div></div>` : ''}
+    ${flagged.map(l => `<div class="labflag"><div class="row"><div class="grow"><b>${esc(l.L?.n || l.m)}</b><div class="rs">${rangeTxt(l.L)}</div></div><b class="red">${r1(l.v)} ${l.L?.u || ''} · ${l.flag.toUpperCase()}</b></div>${l.L?.note ? `<div class="note" style="margin-top:4px">${esc(l.L.note)}</div>` : ''}</div>`).join('')}
+    ${!latest.length ? '<div class="empty">No results yet.</div>' : ''}</section>
+  ${groups.map(([p, ls]) => `<section class="panel"><div class="ptitle"><span>${esc(p)}</span></div>${ls.map(row).join('')}</section>`).join('')}
+  <button class="btn ghost full" data-act="body.addlab">+ Add lab results</button>
+  <div class="note center">Ranges are from your lab's report where available. Not medical advice; talk to your doctor about anything flagged.</div>`;
 }
 reg('body.addlab', () => sheet('Add lab results', `<label class="field"><span>Test date</span><input id="lb-d" type="date" value="${dkey()}"></label>
   <div class="note">Fill in only what's on your report.</div>
-  ${H.LABS.map(L => `<label class="field"><span>${L.n} (${L.u})</span><input id="lb-${L.id}" type="number" inputmode="decimal" step="any"></label>`).join('')}
+  ${H.LAB_PANELS.map(p => `<div class="sub mt">${p}</div>` + H.LABS.filter(L => L.p === p).map(L => `<label class="field"><span>${L.n}${L.u ? ` (${L.u})` : ''}</span><input id="lb-${L.id}" type="number" inputmode="decimal" step="any"></label>`).join('')).join('')}
   <button class="btn full big mt" data-act="body.savelabs">Save results</button>`));
 reg('body.savelabs', () => {
   const d = $('#lb-d').value || dkey(); let n = 0;

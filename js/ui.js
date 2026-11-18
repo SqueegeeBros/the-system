@@ -59,16 +59,21 @@ export function sheet(title, html, { onMount, onClose, wide } = {}) {
 function dragToClose(card, body) {
   let y0 = null, dy = 0, t0 = 0, active = false;
   const Y = e => (e.touches ? e.touches[0] : e).clientY;
+  // Any scrollable box between the finger and the sheet (the sheet body, the coach chat…) that isn't at its top
+  // means the finger is scrolling content, not closing the sheet.
+  const scrolledAbove = el => { for (; el && el !== card; el = el.parentElement) if (el.scrollHeight > el.clientHeight + 1 && el.scrollTop > 0) return true; return false; };
+  let startEl = null;
   const start = e => {
     const fromHead = !!e.target.closest('.sheet-head') || Y(e) - card.getBoundingClientRect().top < 28;
-    if (!fromHead && (body.scrollTop > 0 || e.target.closest('input,textarea,select,.fx-slider'))) return;
+    if (!fromHead && (scrolledAbove(e.target) || e.target.closest('input,textarea,select,.fx-slider,.chatmsgs'))) return;
+    startEl = e.target;
     y0 = Y(e); dy = 0; t0 = Date.now(); active = false;
   };
   const move = e => {
     if (y0 == null) return;
     const d = Y(e) - y0;
     if (!active) {
-      if (d > 6 && (body.scrollTop <= 0 || e.target.closest('.sheet-head'))) { active = true; card.style.transition = 'none'; card.style.animation = 'none'; }
+      if (d > 6 && (!scrolledAbove(startEl) || e.target.closest('.sheet-head'))) { active = true; card.style.transition = 'none'; card.style.animation = 'none'; }
       else if (d < -6) { y0 = null; return; } else return;
     }
     dy = Math.max(0, d); card.style.transform = `translateY(${dy}px)`;

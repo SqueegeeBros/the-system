@@ -15,8 +15,8 @@
     { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Log food", "url": "./#food", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Start training", "url": "./#train", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Deep work", "url": "./#work", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Scan food", "short_name": "Scan", "url": "./#scan", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Food", "url": "./#food", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Coach", "url": "./#coach", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

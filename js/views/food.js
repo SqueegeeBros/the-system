@@ -183,58 +183,43 @@ reg('food.quicksheet', () => sheet('Log food', `${macroBars()}${quickTilesHTML()
   <button class="btn ghost full mt" data-act="food.frommeals">All my meals…</button>`));
 
 // ---------- View ----------
+// v21: simple Food. Two tabs (Today, Shop). Today = scan button, your plan meals with one-tap "Ate it",
+// totals, water. Editing meals and the targets/plan page are one link away instead of their own tabs.
 export function render() {
   const sub = nav.sub.food;
-  const seg = `<div class="seg">
-    ${[['today', 'Log'], ['meals', 'Meals'], ['plan', 'Plan'], ['shop', 'Shop']].map(([k, l]) =>
-      `<button class="${sub === k ? 'on' : ''}" data-act="food.sub" data-k="${k}">${l}</button>`).join('')}</div>`;
-  return `<div class="wrap">${seg}${sub === 'meals' ? mealsView() : sub === 'shop' ? shopView() : sub === 'plan' ? planView() : todayView()}</div>`;
+  if (sub === 'meals' || sub === 'plan') return `<div class="wrap"><button class="linkbtn back" data-act="food.sub" data-k="today">‹ Food</button>${sub === 'meals' ? mealsView() : planView()}</div>`;
+  const seg = `<div class="seg">${[['today', 'Today'], ['shop', 'Shop']].map(([k, l]) =>
+    `<button class="${(sub === k || (k === 'today' && sub !== 'shop')) ? 'on' : ''}" data-act="food.sub" data-k="${k}">${l}</button>`).join('')}</div>`;
+  return `<div class="wrap">${seg}${sub === 'shop' ? shopView() : todayView()}</div>`;
 }
 reg('food.sub', el => { nav.sub.food = el.dataset.k; rerender(); window.scrollTo(0, 0); });
 
+const planMeals = () => S.meals.filter(m => m.planTemplate && m.prep?.on);
 function todayView() {
-  const today = dkey(), k = nav.foodDate || today, editable = k === today;
-  const d = S.days[k] || { food: [], water: 0 }, t = E.totals(k), T = S.settings.targets;
-  const kLeft = Math.max(0, T.kcal - t.kcal), pLeft = Math.max(0, T.p - t.p);
+  nav.foodDate = null;
+  const k = dkey(), d = S.days[k] || { food: [], water: 0 }, t = E.totals(k), T = S.settings.targets;
   const entries = [...(d.food || [])].sort((a, b) => a.t - b.t);
+  const pct = Math.min(100, Math.round(t.kcal / T.kcal * 100) || 0);
+  const plan = planMeals();
   return `
+  <button class="scanbig" data-act="food.barcode"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 8v8M11 8v8M14 8v8M17 8v8"/></svg><span>Scan food</span></button>
   <section class="panel">
-    <div class="datenav">
-      <button class="iconbtn" data-act="food.day" data-n="-1" aria-label="Previous day">‹</button>
-      <div class="ptitle inline"><span>${esc(niceDate(k))}</span></div>
-      <button class="iconbtn" data-act="food.day" data-n="1" ${editable ? 'disabled' : ''} aria-label="Next day">›</button>
-    </div>
     <div class="bigline"><div><b>${fmt(t.kcal)}</b><span> / ${fmt(T.kcal)} kcal</span></div><div><b>${r1(t.p)}</b><span> / ${T.p} g protein</span></div></div>
-    ${macroBars(k)}
-    <div class="note">${kLeft || pLeft ? `${fmt(kLeft)} kcal and ${r1(pLeft)} g protein to go.` : 'Targets hit for the day.'}</div>
+    <div class="simplebar"><i style="width:${pct}%"></i></div>
   </section>
-
-  ${editable ? `<section class="panel">
-    <div class="ptitle"><span>Add food</span></div>
-    <div class="chips">${S.meals.filter(m => m.pinned).map(mealChip).join('')}</div>
-    <button class="btn ghost full mt" data-act="food.frommeals">All my meals…</button>
-    ${toolsRow()}
+  ${plan.length ? `<section class="panel"><div class="ptitle"><span>Today's meals</span></div>
+    ${plan.map(m => { const e = entries.find(x => x.mealId === m.id);
+      return `<div class="row ate${e ? ' done' : ''}"><div class="grow"><div class="rt sm">${esc(m.name)}</div><div class="rs">${fmt(m.kcal)} kcal · ${r1(m.p)} g protein</div></div>
+        ${e ? `<button class="btn ghost sm" data-act="food.del" data-id="${e.id}" aria-label="Undo">✓ Ate it</button>` : `<button class="btn sm" data-act="food.ate" data-id="${m.id}">Ate it</button>`}</div>`; }).join('')}
   </section>` : ''}
-
-  <section class="panel">
-    <div class="ptitle"><span>Logged</span></div>
-    ${H.MEAL_SLOTS.map(([slot, label]) => {
-      const es = entries.filter(e => slotOf(e) === slot);
-      if (!es.length && !editable) return '';
-      const kc = es.reduce((a, e) => a + e.kcal, 0), pr = es.reduce((a, e) => a + e.p, 0);
-      return `<div class="mealhead"><div class="grow"><b>${label}</b><small>${es.length ? `${fmt(kc)} kcal · ${r1(pr)} g protein` : 'nothing yet'}</small></div>
-        ${editable ? `<button class="iconbtn" data-act="food.addto" data-m="${slot}" aria-label="Add food to ${label}">+</button>` : ''}</div>
-        ${es.map(e => `<div class="row">
-          <button class="grow entrybtn" ${editable ? `data-act="food.amount" data-id="${e.id}"` : 'disabled'}><div class="rt">${esc(e.name)} <span class="amt">${esc(amountLabel(e))}</span></div>
-            <div class="rs">${timeStr(e.t)} · ${fmt(e.kcal)} kcal · ${r1(e.p)}P / ${r1(e.c)}C / ${r1(e.f)}F${editable ? ' · <u>change</u>' : ''}</div></button>
-          ${editable ? `<button class="iconbtn red" data-act="food.del" data-id="${e.id}" aria-label="Remove">×</button>` : ''}</div>`).join('')}`;
-    }).join('')}
-    ${!entries.length && !editable ? `<div class="empty">Nothing was logged this day.</div>` : ''}
-    ${!editable ? `<div class="note">Past days are read-only. Penalties for them are already settled.</div>` : ''}
-  </section>
-
-  ${waterPanel(k, editable)}`;
+  <button class="btn ghost full" data-act="food.quicksheet">+ Something else</button>
+  ${entries.length ? `<details class="panel fold"><summary>Logged today (${entries.length})</summary>
+    ${entries.map(e => `<div class="row"><button class="grow entrybtn" data-act="food.amount" data-id="${e.id}"><div class="rt">${esc(e.name)} <span class="amt">${esc(amountLabel(e))}</span></div>
+      <div class="rs">${timeStr(e.t)} · ${fmt(e.kcal)} kcal · ${r1(e.p)} g protein</div></button><button class="iconbtn red" data-act="food.del" data-id="${e.id}" aria-label="Remove">×</button></div>`).join('')}</details>` : ''}
+  ${waterPanel(k, true)}
+  <div class="linkrow"><button class="linkbtn" data-act="food.sub" data-k="meals">Edit meals</button><button class="linkbtn" data-act="food.sub" data-k="plan">Targets & plan</button></div>`;
 }
+reg('food.ate', async el => { await logMeal(el.dataset.id); rerender(); });
 
 reg('food.day', el => {
   const today = dkey(), cur = nav.foodDate || today, next = addDays(cur, +el.dataset.n);

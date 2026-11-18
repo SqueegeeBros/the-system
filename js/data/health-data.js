@@ -114,23 +114,67 @@ export const SKIP_LIST = [
 export const SLOTS = { am: 'Morning', mid: 'Pre-workout', pm: 'Night' };
 
 /* ---------- Labs ---------- */
+// Ranges match Nathan's Labcorp reports (Nov 2026) where he has them; others are typical adult ranges.
+// p = panel (used to group the list). Your lab's report always has the final say.
 export const LABS = [
-  { id: 'vitd', n: '25-OH Vitamin D', u: 'ng/mL', lo: 30, hi: 60, note: 'Keep it around 30–50. Your vitamin D dose in Pills follows this result.' },
-  { id: 'tt', n: 'Total testosterone', u: 'ng/dL', lo: 264, hi: 916, note: 'Test at 7–10 AM, fasted.' },
-  { id: 'ft', n: 'Free testosterone', u: 'pg/mL', lo: null, hi: null, note: 'Ranges vary by lab. Use the range on your report.' },
-  { id: 'ferritin', n: 'Ferritin', u: 'ng/mL', lo: 30, hi: 300 },
-  { id: 'hgb', n: 'Hemoglobin', u: 'g/dL', lo: 13.5, hi: 17.5 },
-  { id: 'glu', n: 'Fasting glucose', u: 'mg/dL', lo: 70, hi: 99 },
-  { id: 'a1c', n: 'HbA1c', u: '%', lo: 4, hi: 5.6 },
-  { id: 'ldl', n: 'LDL-C', u: 'mg/dL', lo: null, hi: 99 },
-  { id: 'hdl', n: 'HDL-C', u: 'mg/dL', lo: 40, hi: null },
-  { id: 'tg', n: 'Triglycerides', u: 'mg/dL', lo: null, hi: 149 },
-  { id: 'apob', n: 'ApoB', u: 'mg/dL', lo: null, hi: 89 },
-  { id: 'alt', n: 'ALT', u: 'U/L', lo: null, hi: 44, note: 'Hard lifting raises it for days. Test after 48–72 h with no training.' },
-  { id: 'ast', n: 'AST', u: 'U/L', lo: null, hi: 40, note: 'Lifting raises it temporarily.' },
-  { id: 'creat', n: 'Creatinine', u: 'mg/dL', lo: 0.7, hi: 1.3, note: 'Creatine and a lot of muscle raise it without kidney harm. If it\'s flagged, ask for a cystatin C test.' },
-  { id: 'tsh', n: 'TSH', u: 'mIU/L', lo: 0.4, hi: 4.0 },
+  // Metabolic panel (CMP)
+  { id: 'glu', p: 'Metabolic panel', n: 'Glucose', u: 'mg/dL', lo: 70, hi: 99, note: 'Fasting range. Eating before the draw raises it.' },
+  { id: 'bun', p: 'Metabolic panel', n: 'BUN (urea nitrogen)', u: 'mg/dL', lo: 6, hi: 20, note: 'A high-protein diet and not drinking enough water can both nudge it up. Read it alongside creatinine.' },
+  { id: 'creat', p: 'Metabolic panel', n: 'Creatinine', u: 'mg/dL', lo: 0.76, hi: 1.27, note: 'Creatine and a lot of muscle raise it without kidney harm. If it\'s flagged, ask for a cystatin C test.' },
+  { id: 'buncr', p: 'Metabolic panel', n: 'BUN/creatinine ratio', u: '', lo: 9, hi: 20 },
+  { id: 'na', p: 'Metabolic panel', n: 'Sodium', u: 'mmol/L', lo: 134, hi: 144 },
+  { id: 'k', p: 'Metabolic panel', n: 'Potassium', u: 'mmol/L', lo: 3.5, hi: 5.2 },
+  { id: 'cl', p: 'Metabolic panel', n: 'Chloride', u: 'mmol/L', lo: 96, hi: 106 },
+  { id: 'co2', p: 'Metabolic panel', n: 'CO2 (bicarbonate)', u: 'mmol/L', lo: 20, hi: 29 },
+  { id: 'ca', p: 'Metabolic panel', n: 'Calcium', u: 'mg/dL', lo: 8.7, hi: 10.2 },
+  { id: 'tp', p: 'Metabolic panel', n: 'Total protein', u: 'g/dL', lo: 6.0, hi: 8.5 },
+  { id: 'alb', p: 'Metabolic panel', n: 'Albumin', u: 'g/dL', lo: 4.3, hi: 5.2 },
+  { id: 'glob', p: 'Metabolic panel', n: 'Globulin', u: 'g/dL', lo: 1.5, hi: 4.5 },
+  { id: 'bili', p: 'Metabolic panel', n: 'Bilirubin, total', u: 'mg/dL', lo: 0, hi: 1.2 },
+  { id: 'alp', p: 'Metabolic panel', n: 'Alkaline phosphatase (ALP)', u: 'IU/L', lo: 51, hi: 125, note: 'This is an adult range. Teens and young adults often run higher while bones are still growing. Your liver numbers (ALT, AST, bilirubin) were normal. Ask your doctor whether to recheck it or test which kind it is (bone or liver).' },
+  { id: 'ast', p: 'Metabolic panel', n: 'AST', u: 'IU/L', lo: 0, hi: 40, note: 'Lifting raises it temporarily.' },
+  { id: 'alt', p: 'Metabolic panel', n: 'ALT', u: 'IU/L', lo: 0, hi: 44, note: 'Hard lifting raises it for days. Test after 48–72 h with no training.' },
+  // Blood count (CBC)
+  { id: 'wbc', p: 'Blood count', n: 'White blood cells', u: 'x10³/µL', lo: 3.4, hi: 10.8 },
+  { id: 'rbc', p: 'Blood count', n: 'Red blood cells', u: 'x10⁶/µL', lo: 4.14, hi: 5.8 },
+  { id: 'hgb', p: 'Blood count', n: 'Hemoglobin', u: 'g/dL', lo: 13.0, hi: 17.7 },
+  { id: 'hct', p: 'Blood count', n: 'Hematocrit', u: '%', lo: 37.5, hi: 51.0 },
+  { id: 'mcv', p: 'Blood count', n: 'MCV', u: 'fL', lo: 79, hi: 97 },
+  { id: 'mch', p: 'Blood count', n: 'MCH', u: 'pg', lo: 26.6, hi: 33.0 },
+  { id: 'mchc', p: 'Blood count', n: 'MCHC', u: 'g/dL', lo: 31.5, hi: 35.7 },
+  { id: 'rdw', p: 'Blood count', n: 'RDW', u: '%', lo: 11.6, hi: 15.4 },
+  { id: 'plt', p: 'Blood count', n: 'Platelets', u: 'x10³/µL', lo: 150, hi: 450 },
+  { id: 'neutp', p: 'Blood count', n: 'Neutrophils', u: '%', lo: null, hi: null },
+  { id: 'lymp', p: 'Blood count', n: 'Lymphocytes', u: '%', lo: null, hi: null },
+  { id: 'monop', p: 'Blood count', n: 'Monocytes', u: '%', lo: null, hi: null },
+  { id: 'eosp', p: 'Blood count', n: 'Eosinophils', u: '%', lo: null, hi: null },
+  { id: 'basop', p: 'Blood count', n: 'Basophils', u: '%', lo: null, hi: null },
+  { id: 'igp', p: 'Blood count', n: 'Immature granulocytes', u: '%', lo: null, hi: null },
+  { id: 'neut', p: 'Blood count', n: 'Neutrophils (absolute)', u: 'x10³/µL', lo: 1.4, hi: 7.0 },
+  { id: 'lym', p: 'Blood count', n: 'Lymphocytes (absolute)', u: 'x10³/µL', lo: 0.7, hi: 3.1 },
+  { id: 'mono', p: 'Blood count', n: 'Monocytes (absolute)', u: 'x10³/µL', lo: 0.1, hi: 0.9 },
+  { id: 'eos', p: 'Blood count', n: 'Eosinophils (absolute)', u: 'x10³/µL', lo: 0, hi: 0.4 },
+  { id: 'baso', p: 'Blood count', n: 'Basophils (absolute)', u: 'x10³/µL', lo: 0, hi: 0.2 },
+  { id: 'ig', p: 'Blood count', n: 'Immature granulocytes (absolute)', u: 'x10³/µL', lo: 0, hi: 0.1 },
+  // Thyroid
+  { id: 'tsh', p: 'Thyroid', n: 'TSH', u: 'µIU/mL', lo: 0.45, hi: 4.5 },
+  { id: 'ft4', p: 'Thyroid', n: 'Free T4', u: 'ng/dL', lo: 0.93, hi: 1.6 },
+  // Other
+  { id: 'uric', p: 'Other', n: 'Uric acid', u: 'mg/dL', lo: 3.8, hi: 8.4, note: 'The "under 6.0" target printed on reports is for people being treated for gout.' },
+  { id: 'ldh', p: 'Other', n: 'LDH', u: 'IU/L', lo: 121, hi: 224 },
+  { id: 'vitd', p: 'Other', n: '25-OH Vitamin D', u: 'ng/mL', lo: 30, hi: 60, note: 'Keep it around 30–50. Your vitamin D dose in Pills follows this result.' },
+  { id: 'ferritin', p: 'Other', n: 'Ferritin', u: 'ng/mL', lo: 30, hi: 300 },
+  { id: 'a1c', p: 'Other', n: 'HbA1c', u: '%', lo: 4, hi: 5.6 },
+  // Hormones & lipids (not tested yet)
+  { id: 'tt', p: 'Hormones & lipids', n: 'Total testosterone', u: 'ng/dL', lo: 264, hi: 916, note: 'Test at 7–10 AM, fasted.' },
+  { id: 'ft', p: 'Hormones & lipids', n: 'Free testosterone', u: 'pg/mL', lo: null, hi: null, note: 'Ranges vary by lab. Use the range on your report.' },
+  { id: 'ldl', p: 'Hormones & lipids', n: 'LDL-C', u: 'mg/dL', lo: null, hi: 99 },
+  { id: 'hdl', p: 'Hormones & lipids', n: 'HDL-C', u: 'mg/dL', lo: 40, hi: null },
+  { id: 'tg', p: 'Hormones & lipids', n: 'Triglycerides', u: 'mg/dL', lo: null, hi: 149 },
+  { id: 'apob', p: 'Hormones & lipids', n: 'ApoB', u: 'mg/dL', lo: null, hi: 89 },
 ];
+export const LAB_PANELS = ['Metabolic panel', 'Blood count', 'Thyroid', 'Other', 'Hormones & lipids'];
+
 
 /* ---------- Foods (per serving) ---------- */
 // Intrinsic allergen tags for built-in foods, so a badge shows even if the allergy list changes.

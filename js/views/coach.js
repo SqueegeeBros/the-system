@@ -61,7 +61,10 @@ function msgsHTML() {
 function paint() {
   const box = $('#chatmsgs'); if (!box) return;
   box.innerHTML = msgsHTML() + (busyNow ? `<div class="msg model"><div class="bubble typing"><i></i><i></i><i></i></div></div>` : '');
-  box.scrollTop = box.scrollHeight;
+  // While waiting, show the bottom. When a reply lands, show the START of the reply, not its end.
+  const last = box.lastElementChild;
+  if (!busyNow && last?.classList.contains('model')) box.scrollTop = Math.max(0, last.offsetTop - 8);
+  else box.scrollTop = box.scrollHeight;
 }
 
 let busyNow = false;

@@ -5,7 +5,7 @@ import { $, $$, esc, niceDate } from './util.js';
 import { ACT, CHG, TICK, nav, go, rerender } from './core.js';
 import { notice, toast } from './ui.js';
 
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 import { storageOK } from './db.js';
 import * as Quests from './views/quests.js';
 import * as Food from './views/food.js';
@@ -145,7 +145,8 @@ window.addEventListener('pagehide', () => { flush(); flushFace(); });
   Work.splitFocusAtMidnight();
   const reports = E.rollover();
   E.sync();
-  const t = location.hash.slice(1);
+  // Opening the app at "#food" only happens from the old "Log food" home-screen shortcut, so treat it as Scan.
+  const t0 = location.hash.slice(1), t = t0 === 'food' ? 'scan' : t0;
   nav.tab = VIEWS[t] ? t : t === 'scan' ? 'food' : 'quests';
   rerender();
   launchAction(t);

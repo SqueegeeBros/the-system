@@ -16,7 +16,6 @@
   ],
   "shortcuts": [
     { "name": "Scan food", "short_name": "Scan", "url": "./#scan", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Food", "url": "./#food", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Coach", "url": "./#coach", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+        { "name": "Coach", "url": "./#coach", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

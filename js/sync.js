@@ -96,7 +96,7 @@ async function reconcile(fresh = false) {
   if (useAccount) { await kvSet('pre-sync-backup', JSON.parse(JSON.stringify(S))); await applyRemote(row.data); S.syncUser = uidOf(); save(); await flush(); }
   else { S.syncUser = uidOf(); save(); await flush(); await pushNow(true); }
   status.at = Date.now(); set('idle');
-  location.reload();
+  history.replaceState(null, '', '#quests'); location.reload();
 }
 
 // Bring in newer data from another device. Returns true if local data was replaced.

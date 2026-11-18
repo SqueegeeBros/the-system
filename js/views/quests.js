@@ -1,4 +1,4 @@
-// TODAY (home): standard card, today's program, quest checklist, fuel, week, medals.
+// TODAY (home): greeting + XP, today's workout, fuel, today's standard, quests, side quests, week, medals.
 import { S, day, save } from '../state.js';
 import * as E from '../engine.js';
 import { esc, dkey, addDays, parseKey, DOW, fmt, pct, clock, r1, timeStr, num } from '../util.js';
@@ -148,6 +148,11 @@ export function render() {
     <div class="pills"><div class="pill2">${FLAME}${h.streak}</div><div class="pill2">×${E.mult().toFixed(1)} XP</div></div>
   </div>
 
+  ${programCard(k)}
+
+  <div class="sect"><span class="h">Fuel</span><button data-act="food.barcode">Scan food</button></div>
+  ${fuelCard(k)}
+
   <section class="hero${!d.paused && !left ? ' clear' : ''}">
     <div class="row2">
       <div><div class="lbl">Today’s standard</div><div class="big h">${doneCount}<span>/${req.length}</span></div></div>
@@ -162,7 +167,6 @@ export function render() {
     ${h.missStreak ? `<div class="miss sm">⚠ ${h.missStreak} of 3 missed days before a rank drop</div>` : ''}
   </section>
 
-  ${programCard(k)}
 
   ${d.paused ? '' : `<div class="sect"><span class="h">Quests</span><a>${doneCount} of ${req.length}</a></div>
   <div class="qlist">${questRows(k)}</div>`}
@@ -172,8 +176,6 @@ export function render() {
     return `<div class="qrow small${on ? ' done' : ''}"><button class="qmain" data-act="quest.biz" data-id="${t.id}"><span class="box">${CHECK}</span>
       <span class="qtext"><span class="qt">${esc(t.name)}</span></span></button></div>`; }).join('')}</div>` : ''}
 
-  <div class="sect"><span class="h">Fuel</span><button data-act="nav.go" data-tab="food">Open log</button></div>
-  ${fuelCard(k)}
 
   <div class="sect"><span class="h">This week</span><button data-act="nav.go" data-tab="status">History</button></div>
   ${weekCard()}
